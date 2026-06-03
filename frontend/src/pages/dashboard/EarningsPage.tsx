@@ -13,6 +13,7 @@ export function EarningsPage() {
   const [page, setPage] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<ImportEarningsResponse | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
   const earnings = useQuery({
     queryKey: ['earnings', page],
     queryFn: () => getEarnings(page),
@@ -23,6 +24,7 @@ export function EarningsPage() {
     onSuccess: (result) => {
       setImportResult(result);
       setFile(null);
+      setShowImportModal(false);
       setPage(0);
       queryClient.invalidateQueries({ queryKey: ['earnings'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
@@ -46,41 +48,44 @@ export function EarningsPage() {
         <OverviewStat icon="dashboard" label="Average hourly rate" value={`${money.format(data?.averageHourlyRate ?? 0)}/hr`} />
       </div>
 
-      <section className="mb-8 rounded-lg border border-border bg-card p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Import historical earnings</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Upload a CSV with Start Date, End Date, Weekly Hours, Weekly Income.</p>
-          </div>
-          <form
-            className="flex flex-col gap-3 sm:flex-row sm:items-center"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (file) importCsv.mutate(file);
-            }}
-          >
-            <label className="button-secondary cursor-pointer gap-2">
+      <section className="mb-8 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-primary">
               <Icon name="upload" className="h-4 w-4" />
-              {file ? file.name : 'Choose CSV'}
-              <input
-                className="sr-only"
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(event) => {
-                  setFile(event.target.files?.[0] ?? null);
-                  setImportResult(null);
-                }}
-              />
-            </label>
-            <button className="button gap-2" disabled={!file || importCsv.isPending} type="submit">
-              <Icon name="check" className="h-4 w-4" />
-              {importCsv.isPending ? 'Importing...' : 'Import'}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">Historical earnings</h2>
+              <p className="truncate text-xs text-muted-foreground">Import weekly CSV history or download a starter template.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              className="icon-button bg-white text-foreground hover:text-primary"
+              href={csvTemplateUrl}
+              download="tutr-earnings-template.csv"
+              title="Download CSV template"
+              aria-label="Download CSV template"
+            >
+              <Icon name="download" className="h-4 w-4" />
+            </a>
+            <button
+              className="icon-button bg-white text-foreground hover:text-primary"
+              type="button"
+              title="Import earnings CSV"
+              aria-label="Import earnings CSV"
+              onClick={() => {
+                setShowImportModal(true);
+                setImportResult(null);
+              }}
+            >
+              <Icon name="upload" className="h-4 w-4" />
             </button>
-          </form>
+          </div>
         </div>
 
         {importResult && (
-          <div className="mt-4 rounded-lg bg-muted/60 p-3 text-sm">
+          <div className="mt-3 rounded-md bg-white/80 p-3 text-sm">
             <p className="font-medium text-foreground">
               Imported {importResult.importedRows} new rows and updated {importResult.updatedRows} existing rows.
             </p>
@@ -145,6 +150,56 @@ export function EarningsPage() {
           </button>
         </div>
       </section>
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="import-earnings-title">
+          <form
+            className="w-full rounded-t-lg border border-border bg-card p-5 shadow-xl sm:mx-auto sm:max-w-lg sm:rounded-lg"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (file) importCsv.mutate(file);
+            }}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="import-earnings-title" className="text-lg font-semibold text-foreground">Import historical earnings</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Use CSV headers: Start Date, End Date, Weekly Hours, Weekly Income.</p>
+              </div>
+              <button type="button" className="button-secondary h-9 w-9 p-0" onClick={() => { setShowImportModal(false); setFile(null); }} aria-label="Close import form">
+                <Icon name="x" className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 py-5 text-center transition-colors hover:bg-muted">
+              <Icon name="upload" className="mb-2 h-6 w-6 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">{file ? file.name : 'Choose CSV file'}</span>
+              <span className="mt-1 text-xs text-muted-foreground">CSV only, dates as dd/MM/yyyy</span>
+              <input
+                className="sr-only"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setImportResult(null);
+                }}
+              />
+            </label>
+
+            <div className="mt-4 rounded-md bg-muted/60 p-3 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground">Example</p>
+              <p className="mt-1 font-mono">25/05/2026,31/05/2026,5,350</p>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" className="button-secondary" onClick={() => { setShowImportModal(false); setFile(null); }}>Cancel</button>
+              <button type="submit" className="button gap-2" disabled={!file || importCsv.isPending}>
+                <Icon name="check" className="h-4 w-4" />
+                {importCsv.isPending ? 'Importing...' : 'Confirm import'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -168,3 +223,11 @@ function Th({ children, align = 'left' }: { children: React.ReactNode; align?: '
 function dateLabel(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+const csvTemplate = [
+  'Start Date,End Date,Weekly Hours,Weekly Income',
+  '25/05/2026,31/05/2026,5,350',
+  '18/05/2026,24/05/2026,6,420',
+].join('\n');
+
+const csvTemplateUrl = `data:text/csv;charset=utf-8,${encodeURIComponent(csvTemplate)}`;
