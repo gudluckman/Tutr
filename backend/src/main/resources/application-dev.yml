@@ -1,0 +1,5 @@
+spring:
+  config:
+    import:
+      - optional:file:.env.dev[.properties]
+      - optional:file:backend/.env.dev[.properties]

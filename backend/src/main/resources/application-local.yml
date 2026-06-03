@@ -1,0 +1,12 @@
+spring:
+  config:
+    import:
+      - optional:file:.env.local[.properties]
+      - optional:file:backend/.env.local[.properties]
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/tutr}
+    username: ${DATABASE_USERNAME:tutr_user}
+    password: ${DATABASE_PASSWORD:tutr_password}
+  sql:
+    init:
+      mode: always
