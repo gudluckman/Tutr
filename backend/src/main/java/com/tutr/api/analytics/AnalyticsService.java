@@ -20,6 +20,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.tutr.api.analytics.AnalyticsDtos.*;
@@ -36,8 +38,12 @@ import static com.tutr.api.analytics.AnalyticsDtos.*;
 @RequiredArgsConstructor
 public class AnalyticsService {
     private static final ZoneId ANALYTICS_TIME_ZONE = ZoneId.of("Australia/Sydney");
-    private static final DateTimeFormatter IMPORT_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter IMPORT_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT);
     private static final List<String> IMPORT_HEADERS = List.of("Start Date", "End Date", "Weekly Hours", "Weekly Income");
+    private static final Pattern IMPORT_DECIMAL = Pattern.compile("\\d+(\\.\\d{1,2})?");
+    private static final int MIN_IMPORT_YEAR = 2000;
+    private static final BigDecimal MAX_WEEKLY_HOURS = BigDecimal.valueOf(168);
+    private static final BigDecimal MAX_WEEKLY_INCOME = BigDecimal.valueOf(100_000);
 
     private final LessonRepository lessons;
     private final ImportedEarningRepository importedEarnings;
@@ -172,13 +178,12 @@ public class AnalyticsService {
         }
 
         List<String> errors = new ArrayList<>();
-        List<String> blockingErrors = new ArrayList<>();
         int importedRows = 0;
         int updatedRows = 0;
         Map<ImportedWeekKey, ParsedEarning> parsedRows = new LinkedHashMap<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String header = reader.readLine();
-            if (header == null || !IMPORT_HEADERS.equals(parseCsvLine(header).stream().map(String::trim).toList())) {
+            if (header == null || !IMPORT_HEADERS.equals(parseCsvLine(stripBom(header)).stream().map(String::trim).toList())) {
                 return new ImportEarningsResponse(0, 0, List.of("CSV headers must be: " + String.join(", ", IMPORT_HEADERS)));
             }
 
@@ -191,22 +196,27 @@ public class AnalyticsService {
                 }
                 List<String> columns = parseCsvLine(line);
                 if (columns.size() != IMPORT_HEADERS.size()) {
-                    addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": expected 4 columns.");
+                    errors.add("Line " + lineNumber + ": expected 4 columns.");
                     continue;
                 }
-                ParsedEarning parsed = parseEarning(lineNumber, columns, errors, blockingErrors);
+                ParsedEarning parsed = parseEarning(lineNumber, columns, errors);
                 if (parsed == null) {
                     continue;
                 }
                 ImportedWeekKey key = new ImportedWeekKey(parsed.startDate(), parsed.endDate());
                 if (parsedRows.containsKey(key)) {
-                    errors.add("Line " + lineNumber + ": duplicate week range was merged with an earlier row.");
+                    errors.add("Line " + lineNumber + ": duplicate week range. Remove or combine this week before uploading.");
+                    continue;
                 }
-                parsedRows.merge(key, parsed, ParsedEarning::add);
+                parsedRows.put(key, parsed);
             }
 
-            if (replaceExisting && !blockingErrors.isEmpty()) {
-                errors.add("No existing imported earnings were replaced because the CSV has row errors.");
+            if (parsedRows.isEmpty()) {
+                errors.add("CSV must include at least one earning row.");
+            }
+
+            if (!errors.isEmpty()) {
+                errors.add("No imported earnings were changed. Fix the CSV and upload it again.");
                 return new ImportEarningsResponse(0, 0, errors);
             }
 
@@ -238,47 +248,80 @@ public class AnalyticsService {
         return new ImportEarningsResponse(importedRows, updatedRows, errors);
     }
 
-    private ParsedEarning parseEarning(int lineNumber, List<String> columns, List<String> errors, List<String> blockingErrors) {
-        LocalDate startDate = parseDate(lineNumber, "Start Date", columns.get(0), errors, blockingErrors);
-        LocalDate endDate = parseDate(lineNumber, "End Date", columns.get(1), errors, blockingErrors);
-        BigDecimal weeklyHours = parsePositiveDecimal(lineNumber, "Weekly Hours", columns.get(2), errors, blockingErrors);
-        BigDecimal weeklyIncome = parsePositiveDecimal(lineNumber, "Weekly Income", columns.get(3), errors, blockingErrors);
+    private ParsedEarning parseEarning(int lineNumber, List<String> columns, List<String> errors) {
+        for (int i = 0; i < IMPORT_HEADERS.size(); i++) {
+            if (columns.get(i).isBlank()) {
+                errors.add("Line " + lineNumber + ": " + IMPORT_HEADERS.get(i) + " cannot be blank.");
+            }
+        }
+        if (columns.stream().anyMatch(String::isBlank)) {
+            return null;
+        }
+
+        LocalDate startDate = parseDate(lineNumber, "Start Date", columns.get(0), errors);
+        LocalDate endDate = parseDate(lineNumber, "End Date", columns.get(1), errors);
+        BigDecimal weeklyHours = parsePositiveDecimal(lineNumber, "Weekly Hours", columns.get(2), MAX_WEEKLY_HOURS, errors);
+        BigDecimal weeklyIncome = parsePositiveDecimal(lineNumber, "Weekly Income", columns.get(3), MAX_WEEKLY_INCOME, errors);
         if (startDate == null || endDate == null || weeklyHours == null || weeklyIncome == null) {
             return null;
         }
-        if (endDate.isBefore(startDate)) {
-            addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": End Date must be on or after Start Date.");
+        if (!endDate.isAfter(startDate)) {
+            errors.add("Line " + lineNumber + ": End Date must be after Start Date.");
+            return null;
+        }
+        if (startDate.getDayOfWeek() != DayOfWeek.MONDAY || endDate.getDayOfWeek() != DayOfWeek.SUNDAY) {
+            errors.add("Line " + lineNumber + ": imported weeks must run Monday to Sunday.");
+            return null;
+        }
+        if (!endDate.equals(startDate.plusDays(6))) {
+            errors.add("Line " + lineNumber + ": End Date must be exactly 6 days after Start Date.");
+            return null;
+        }
+        if (startDate.getYear() < MIN_IMPORT_YEAR) {
+            errors.add("Line " + lineNumber + ": Start Date year must be " + MIN_IMPORT_YEAR + " or later.");
+            return null;
+        }
+        if (endDate.isAfter(LocalDate.now(ANALYTICS_TIME_ZONE))) {
+            errors.add("Line " + lineNumber + ": imported earning weeks cannot end in the future.");
             return null;
         }
         return new ParsedEarning(startDate, endDate, weeklyHours, weeklyIncome);
     }
 
-    private LocalDate parseDate(int lineNumber, String label, String value, List<String> errors, List<String> blockingErrors) {
+    private LocalDate parseDate(int lineNumber, String label, String value, List<String> errors) {
         try {
             return LocalDate.parse(value.trim(), IMPORT_DATE_FORMAT);
         } catch (DateTimeParseException ex) {
-            addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": " + label + " must use dd/MM/yyyy.");
+            errors.add("Line " + lineNumber + ": " + label + " must be a real date using dd/MM/yyyy.");
             return null;
         }
     }
 
-    private BigDecimal parsePositiveDecimal(int lineNumber, String label, String value, List<String> errors, List<String> blockingErrors) {
+    private BigDecimal parsePositiveDecimal(int lineNumber, String label, String value, BigDecimal maximum, List<String> errors) {
+        String trimmed = value.trim();
+        if (!IMPORT_DECIMAL.matcher(trimmed).matches()) {
+            errors.add("Line " + lineNumber + ": " + label + " must be a non-negative number with up to 2 decimal places.");
+            return null;
+        }
         try {
-            BigDecimal decimal = new BigDecimal(value.trim());
+            BigDecimal decimal = new BigDecimal(trimmed);
             if (decimal.signum() < 0) {
-                addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": " + label + " cannot be negative.");
+                errors.add("Line " + lineNumber + ": " + label + " cannot be negative.");
+                return null;
+            }
+            if (decimal.compareTo(maximum) > 0) {
+                errors.add("Line " + lineNumber + ": " + label + " looks too high. Maximum allowed is " + maximum.toPlainString() + ".");
                 return null;
             }
             return decimal.setScale(2, RoundingMode.HALF_UP);
         } catch (NumberFormatException ex) {
-            addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": " + label + " must be a number.");
+            errors.add("Line " + lineNumber + ": " + label + " must be a number.");
             return null;
         }
     }
 
-    private void addBlockingError(List<String> errors, List<String> blockingErrors, String message) {
-        errors.add(message);
-        blockingErrors.add(message);
+    private String stripBom(String value) {
+        return value.startsWith("\uFEFF") ? value.substring(1) : value;
     }
 
     private List<String> parseCsvLine(String line) {
@@ -375,14 +418,6 @@ public class AnalyticsService {
     }
 
     private record ParsedEarning(LocalDate startDate, LocalDate endDate, BigDecimal weeklyHours, BigDecimal weeklyIncome) {
-        private ParsedEarning add(ParsedEarning other) {
-            return new ParsedEarning(
-                    startDate,
-                    endDate,
-                    weeklyHours.add(other.weeklyHours),
-                    weeklyIncome.add(other.weeklyIncome)
-            );
-        }
     }
 
     private static final class WeeklyEarningTotals {

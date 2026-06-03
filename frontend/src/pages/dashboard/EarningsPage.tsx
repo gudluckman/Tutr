@@ -15,6 +15,7 @@ export function EarningsPage() {
   const [importResult, setImportResult] = useState<ImportEarningsResponse | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
   const [replaceExistingImports, setReplaceExistingImports] = useState(false);
+  const [importProgress, setImportProgress] = useState<number | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const earnings = useQuery({
     queryKey: ['earnings', page],
@@ -23,16 +24,27 @@ export function EarningsPage() {
   });
   const importCsv = useMutation({
     mutationFn: ({ selectedFile, replaceExisting }: { selectedFile: File; replaceExisting: boolean }) => (
-      importEarningsCsv(selectedFile, replaceExisting)
+      importEarningsCsv(selectedFile, replaceExisting, setImportProgress)
     ),
+    onMutate: () => {
+      setImportResult(null);
+      setImportProgress(0);
+    },
     onSuccess: (result) => {
       setImportResult(result);
+      setImportProgress(null);
+      if (result.errors.length > 0) {
+        return;
+      }
       setFile(null);
       setShowImportModal(false);
       setReplaceExistingImports(false);
       setPage(0);
       queryClient.invalidateQueries({ queryKey: ['earnings'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    },
+    onError: () => {
+      setImportProgress(null);
     },
   });
   const exportCsv = useMutation({
@@ -69,7 +81,9 @@ export function EarningsPage() {
       </div>
 
       <ErrorAlert className="mb-6" error={earnings.error} fallback="Could not load your earnings. Please refresh the page." />
-      <ErrorAlert className="mb-6" error={importCsv.error} fallback="Could not import the CSV file. Please check the format and try again." />
+      {!showImportModal && (
+        <ErrorAlert className="mb-6" error={importCsv.error} fallback="Could not import the CSV file. Please check the format and try again." />
+      )}
       <ErrorAlert className="mb-6" error={exportCsv.error} fallback="Could not export your earnings. Please try again." />
       {exportMessage && (
         <div className="mb-6 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
@@ -112,6 +126,7 @@ export function EarningsPage() {
               onClick={() => {
                 setShowImportModal(true);
                 setImportResult(null);
+                setImportProgress(null);
                 setReplaceExistingImports(false);
               }}
             >
@@ -120,7 +135,7 @@ export function EarningsPage() {
           </div>
         </div>
 
-        {importResult && (
+        {importResult && !showImportModal && (
           <div className="mt-3 rounded-md bg-white/80 p-3 text-sm">
             <p className="font-medium text-foreground">
               Imported {importResult.importedRows} new rows and updated {importResult.updatedRows} existing rows.
@@ -216,7 +231,7 @@ export function EarningsPage() {
               <button
                 type="button"
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-white text-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground"
-                onClick={() => { setShowImportModal(false); setFile(null); setReplaceExistingImports(false); }}
+                onClick={() => { setShowImportModal(false); setFile(null); setReplaceExistingImports(false); setImportProgress(null); }}
                 aria-label="Close import form"
                 title="Close"
               >
@@ -224,8 +239,22 @@ export function EarningsPage() {
               </button>
             </div>
 
+            <ErrorAlert className="mb-4" error={importCsv.error} fallback="Could not import the CSV file. Please check the format and try again." />
+
+            {importResult?.errors.length ? (
+              <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                <p className="font-medium">Fix these CSV issues and upload again.</p>
+                <ul className="mt-2 max-h-32 list-disc space-y-1 overflow-y-auto pl-5">
+                  {importResult.errors.slice(0, 8).map((error) => <li key={error}>{error}</li>)}
+                </ul>
+                {importResult.errors.length > 8 && (
+                  <p className="mt-2 text-xs">Showing 8 of {importResult.errors.length} issues.</p>
+                )}
+              </div>
+            ) : null}
+
             <div className="mb-4 overflow-hidden rounded-md border border-border">
-              <div className="bg-muted px-3 py-2 text-xs font-medium text-foreground">Required CSV format</div>
+              <div className="bg-muted px-3 py-2 text-xs font-medium text-foreground">Required weekly CSV format</div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[420px] text-left text-xs">
                   <thead className="border-b border-border bg-white">
@@ -257,7 +286,7 @@ export function EarningsPage() {
             <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 py-5 text-center transition-colors hover:bg-muted">
               <Icon name="upload" className="mb-2 h-6 w-6 text-muted-foreground" />
               <span className="text-sm font-medium text-foreground">{file ? file.name : 'Drop CSV file'}</span>
-              <span className="mt-1 text-xs text-muted-foreground">CSV only, dates as dd/MM/yyyy</span>
+              <span className="mt-1 text-xs text-muted-foreground">CSV only, Monday-Sunday weeks, dates as dd/MM/yyyy</span>
               <input
                 className="sr-only"
                 type="file"
@@ -265,9 +294,22 @@ export function EarningsPage() {
                 onChange={(event) => {
                   setFile(event.target.files?.[0] ?? null);
                   setImportResult(null);
+                  setImportProgress(null);
                 }}
               />
             </label>
+
+            {importProgress !== null && (
+              <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
+                <div className="mb-2 flex items-center justify-between text-xs font-medium text-foreground">
+                  <span>{importProgress < 100 ? 'Uploading CSV' : 'Validating CSV'}</span>
+                  <span>{importProgress}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white">
+                  <div className="h-full rounded-full bg-primary transition-all duration-200" style={{ width: `${importProgress}%` }} />
+                </div>
+              </div>
+            )}
 
             <label className="mt-4 flex items-start gap-3 rounded-md border border-yellow-200 bg-yellow-50 p-3">
               <input
@@ -285,7 +327,7 @@ export function EarningsPage() {
             </label>
 
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button type="button" className="button-secondary" onClick={() => { setShowImportModal(false); setFile(null); setReplaceExistingImports(false); }}>Cancel</button>
+              <button type="button" className="button-secondary" onClick={() => { setShowImportModal(false); setFile(null); setReplaceExistingImports(false); setImportProgress(null); }}>Cancel</button>
               <button type="submit" className="button gap-2" disabled={!file || importCsv.isPending}>
                 <Icon name="check" className="h-4 w-4" />
                 {importCsv.isPending ? 'Importing...' : replaceExistingImports ? 'Replace imported history' : 'Confirm import'}
