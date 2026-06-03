@@ -150,7 +150,7 @@ export function EarningsPage() {
               disabled={earnings.isLoading || exportCsv.isPending}
               onClick={handleExport}
             >
-              <Icon name="download" className="h-4 w-4" />
+              <Icon name="csvDownload" className="h-4 w-4" />
             </button>
           </div>
         </div>
