@@ -17,3 +17,8 @@ export async function importEarningsCsv(file: File) {
   const { data } = await api.post<ImportEarningsResponse>('/analytics/earnings/import', formData);
   return data;
 }
+
+export async function exportEarningsCsv() {
+  const response = await api.get<Blob>('/analytics/earnings/export', { responseType: 'blob' });
+  return response.status === 204 ? null : response.data;
+}

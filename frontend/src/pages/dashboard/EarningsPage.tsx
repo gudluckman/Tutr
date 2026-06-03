@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getEarnings, importEarningsCsv } from '../../api/analyticsApi';
+import { exportEarningsCsv, getEarnings, importEarningsCsv } from '../../api/analyticsApi';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon, type IconName } from '../../components/ui/Icon';
 import type { ImportEarningsResponse } from '../../types/analytics';
@@ -14,6 +14,7 @@ export function EarningsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<ImportEarningsResponse | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
   const earnings = useQuery({
     queryKey: ['earnings', page],
     queryFn: () => getEarnings(page),
@@ -30,7 +31,31 @@ export function EarningsPage() {
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
     },
   });
+  const exportCsv = useMutation({
+    mutationFn: exportEarningsCsv,
+    onSuccess: (blob) => {
+      if (!blob) {
+        setExportMessage('No earning weeks to export yet.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'tutr-earnings.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+      setExportMessage(null);
+    },
+  });
   const data = earnings.data;
+
+  const handleExport = () => {
+    if (!data || data.totalWeeks === 0) {
+      setExportMessage('No earning weeks to export yet.');
+      return;
+    }
+    exportCsv.mutate();
+  };
 
   return (
     <div className="p-4 sm:p-8">
@@ -41,6 +66,12 @@ export function EarningsPage() {
 
       <ErrorAlert className="mb-6" error={earnings.error} fallback="Could not load your earnings. Please refresh the page." />
       <ErrorAlert className="mb-6" error={importCsv.error} fallback="Could not import the CSV file. Please check the format and try again." />
+      <ErrorAlert className="mb-6" error={exportCsv.error} fallback="Could not export your earnings. Please try again." />
+      {exportMessage && (
+        <div className="mb-6 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
+          {exportMessage}
+        </div>
+      )}
 
       <div className="mb-8 grid gap-4 md:grid-cols-3">
         <OverviewStat icon="dollar" label="Total earnings" value={money.format(data?.totalEarnings ?? 0)} />
@@ -107,9 +138,21 @@ export function EarningsPage() {
             <h2 className="text-lg font-semibold text-foreground">Weekly income</h2>
             <p className="text-sm text-muted-foreground">{data?.totalWeeks ?? 0} earning weeks recorded</p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Page {data?.totalPages ? (data.page + 1) : 0} of {data?.totalPages ?? 0}
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-muted-foreground">
+              Page {data?.totalPages ? (data.page + 1) : 0} of {data?.totalPages ?? 0}
+            </p>
+            <button
+              className="icon-button border border-border bg-white text-foreground hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+              title="Export earnings CSV"
+              aria-label="Export earnings CSV"
+              disabled={earnings.isLoading || exportCsv.isPending}
+              onClick={handleExport}
+            >
+              <Icon name="download" className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className={`overflow-x-auto transition-opacity duration-200 ${earnings.isFetching ? 'opacity-70' : 'opacity-100'}`}>

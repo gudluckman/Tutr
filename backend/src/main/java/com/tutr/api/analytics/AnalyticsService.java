@@ -82,17 +82,63 @@ public class AnalyticsService {
 
     public EarningsResponse earnings(User tutor, int requestedPage, int requestedPageSize) {
         int pageSize = Math.max(1, Math.min(requestedPageSize, 52));
+        List<WeeklyEarning> allWeeks = weeklyEarnings(tutor);
+        BigDecimal combinedTotalEarnings = allWeeks.stream()
+                .map(WeeklyEarning::income)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal combinedTotalHours = allWeeks.stream()
+                .map(WeeklyEarning::hours)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal combinedAverageHourlyRate = combinedTotalHours.signum() == 0
+                ? BigDecimal.ZERO
+                : combinedTotalEarnings.divide(combinedTotalHours, 2, RoundingMode.HALF_UP);
+
+        int totalPages = allWeeks.isEmpty() ? 0 : (allWeeks.size() + pageSize - 1) / pageSize;
+        int page = totalPages == 0 ? 0 : Math.max(0, Math.min(requestedPage, totalPages - 1));
+        int fromIndex = Math.min(page * pageSize, allWeeks.size());
+        int toIndex = Math.min(fromIndex + pageSize, allWeeks.size());
+        return new EarningsResponse(
+                combinedTotalEarnings,
+                combinedTotalHours,
+                combinedAverageHourlyRate,
+                allWeeks.subList(fromIndex, toIndex),
+                page,
+                pageSize,
+                totalPages,
+                allWeeks.size()
+        );
+    }
+
+    public String exportEarningsCsv(User tutor) {
+        List<WeeklyEarning> weeks = weeklyEarnings(tutor);
+        if (weeks.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder csv = new StringBuilder("Week Start,Week End,Total Hours,Total Income,Tutr Lesson Hours,Tutr Lesson Income,Imported Hours,Imported Income\n");
+        weeks.forEach(week -> csv.append(csvValue(week.weekStart()))
+                .append(',')
+                .append(csvValue(week.weekEnd()))
+                .append(',')
+                .append(csvValue(week.hours()))
+                .append(',')
+                .append(csvValue(week.income()))
+                .append(',')
+                .append(csvValue(week.lessonHours()))
+                .append(',')
+                .append(csvValue(week.lessonIncome()))
+                .append(',')
+                .append(csvValue(week.importedHours()))
+                .append(',')
+                .append(csvValue(week.importedIncome()))
+                .append('\n'));
+        return csv.toString();
+    }
+
+    private List<WeeklyEarning> weeklyEarnings(User tutor) {
         List<Lesson> paidLessons = lessons.findByTutorOrderByLessonDateDesc(tutor).stream()
                 .filter(this::isPaidLesson)
                 .toList();
-
-        BigDecimal totalEarnings = paidLessons.stream()
-                .map(this::lessonAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalHours = paidLessons.stream()
-                .map(this::lessonHours)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
         Map<LocalDate, List<Lesson>> lessonsByWeek = paidLessons.stream()
                 .collect(Collectors.groupingBy(
                         lesson -> lesson.getLessonDate().atZone(ANALYTICS_TIME_ZONE).toLocalDate()
@@ -113,37 +159,10 @@ public class AnalyticsService {
                     .addImported(imported.getWeeklyHours(), imported.getWeeklyIncome());
         });
 
-        BigDecimal importedTotalEarnings = weeklyTotals.values().stream()
-                .map(WeeklyEarningTotals::importedIncome)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal importedTotalHours = weeklyTotals.values().stream()
-                .map(WeeklyEarningTotals::importedHours)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal combinedTotalEarnings = totalEarnings.add(importedTotalEarnings);
-        BigDecimal combinedTotalHours = totalHours.add(importedTotalHours);
-        BigDecimal combinedAverageHourlyRate = combinedTotalHours.signum() == 0
-                ? BigDecimal.ZERO
-                : combinedTotalEarnings.divide(combinedTotalHours, 2, RoundingMode.HALF_UP);
-
-        List<WeeklyEarning> allWeeks = weeklyTotals.entrySet().stream()
+        return weeklyTotals.entrySet().stream()
                 .sorted(Map.Entry.<LocalDate, WeeklyEarningTotals>comparingByKey().reversed())
                 .map(entry -> entry.getValue().toResponse())
                 .toList();
-
-        int totalPages = allWeeks.isEmpty() ? 0 : (allWeeks.size() + pageSize - 1) / pageSize;
-        int page = totalPages == 0 ? 0 : Math.max(0, Math.min(requestedPage, totalPages - 1));
-        int fromIndex = Math.min(page * pageSize, allWeeks.size());
-        int toIndex = Math.min(fromIndex + pageSize, allWeeks.size());
-        return new EarningsResponse(
-                combinedTotalEarnings,
-                combinedTotalHours,
-                combinedAverageHourlyRate,
-                allWeeks.subList(fromIndex, toIndex),
-                page,
-                pageSize,
-                totalPages,
-                allWeeks.size()
-        );
     }
 
     @Transactional
@@ -276,6 +295,14 @@ public class AnalyticsService {
             return null;
         }
         return Objects.requireNonNull(filename).replaceAll("[\\\\/]", "").trim();
+    }
+
+    private String csvValue(Object value) {
+        String text = String.valueOf(value == null ? "" : value);
+        if (text.contains(",") || text.contains("\"") || text.contains("\n")) {
+            return "\"" + text.replace("\"", "\"\"") + "\"";
+        }
+        return text;
     }
 
     private boolean isPaidLesson(Lesson lesson) {
