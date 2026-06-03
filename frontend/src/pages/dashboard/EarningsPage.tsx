@@ -41,7 +41,7 @@ export function EarningsPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'tutr-earnings.csv';
+      link.download = `tutr_earnings_until_${exportDateStamp()}.csv`;
       link.click();
       URL.revokeObjectURL(url);
       setExportMessage(null);
@@ -251,7 +251,7 @@ export function EarningsPage() {
 
             <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 py-5 text-center transition-colors hover:bg-muted">
               <Icon name="upload" className="mb-2 h-6 w-6 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">{file ? file.name : 'Choose CSV file'}</span>
+              <span className="text-sm font-medium text-foreground">{file ? file.name : 'Drop CSV file'}</span>
               <span className="mt-1 text-xs text-muted-foreground">CSV only, dates as dd/MM/yyyy</span>
               <input
                 className="sr-only"
@@ -304,6 +304,13 @@ function FormatTd({ children }: { children: React.ReactNode }) {
 
 function dateLabel(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function exportDateStamp() {
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, '0');
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  return `${day}-${month}-${today.getFullYear()}`;
 }
 
 const csvTemplate = [
