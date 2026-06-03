@@ -155,6 +155,7 @@ public class AnalyticsService {
         List<String> errors = new ArrayList<>();
         int importedRows = 0;
         int updatedRows = 0;
+        Map<ImportedWeekKey, ParsedEarning> parsedRows = new LinkedHashMap<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String header = reader.readLine();
             if (header == null || !IMPORT_HEADERS.equals(parseCsvLine(header).stream().map(String::trim).toList())) {
@@ -177,7 +178,14 @@ public class AnalyticsService {
                 if (parsed == null) {
                     continue;
                 }
+                ImportedWeekKey key = new ImportedWeekKey(parsed.startDate(), parsed.endDate());
+                if (parsedRows.containsKey(key)) {
+                    errors.add("Line " + lineNumber + ": duplicate week range was merged with an earlier row.");
+                }
+                parsedRows.merge(key, parsed, ParsedEarning::add);
+            }
 
+            for (ParsedEarning parsed : parsedRows.values()) {
                 ImportedEarning earning = importedEarnings
                         .findByTutorAndStartDateAndEndDate(tutor, parsed.startDate(), parsed.endDate())
                         .orElseGet(ImportedEarning::new);
@@ -321,7 +329,18 @@ public class AnalyticsService {
         }
     }
 
+    private record ImportedWeekKey(LocalDate startDate, LocalDate endDate) {
+    }
+
     private record ParsedEarning(LocalDate startDate, LocalDate endDate, BigDecimal weeklyHours, BigDecimal weeklyIncome) {
+        private ParsedEarning add(ParsedEarning other) {
+            return new ParsedEarning(
+                    startDate,
+                    endDate,
+                    weeklyHours.add(other.weeklyHours),
+                    weeklyIncome.add(other.weeklyIncome)
+            );
+        }
     }
 
     private static final class WeeklyEarningTotals {
