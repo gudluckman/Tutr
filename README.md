@@ -127,11 +127,27 @@ SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 - In DBeaver, use the Supabase Session Pooler: host `aws-0-<REGION>.pooler.supabase.com`, port `5432`, database `postgres`, username `postgres.<PROJECT_REF>`, your database password, and SSL mode `require`. Use the direct host `db.<PROJECT_REF>.supabase.co` only when IPv6/direct connections work for your machine.
 - Do not commit secrets; use environment variables or your platform's secret store.
 
+## Dev Deployment
+
+The repo includes a Render Blueprint in `render.yaml`:
+
+- `tutr-api`: Dockerized Spring Boot backend, health checked at `/api/v1/health`
+- `tutr-web`: Vite static frontend with SPA rewrites to `index.html`
+
+For a dev deployment:
+
+1. Create a Supabase Postgres project.
+2. Connect this GitHub repo in Render and create services from `render.yaml`.
+3. Set backend env vars from `backend/.env.dev.example`: `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `JWT_SECRET`, `FRONTEND_URL`, and `CORS_ALLOWED_ORIGINS`.
+4. Set frontend `VITE_API_BASE_URL` to the deployed backend URL plus `/api/v1`.
+5. After both services deploy, visit `https://<api-host>/api/v1/health` and then open the frontend URL.
+
 ## MVP Features
 
 - Tutor registration and login with JWT authentication
 - Public tutor search and profile pages
 - Public enquiry form on tutor profiles
+- Convert enquiries into students from the tutor dashboard
 - Tutor profile editing and publishing controls
 - Student CRUD for each tutor
 - Lesson CRUD with status and payment status

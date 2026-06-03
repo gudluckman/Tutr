@@ -1,5 +1,6 @@
 import { api } from './client';
 import type { Enquiry, EnquiryStatus } from '../types/enquiry';
+import type { Student } from '../types/student';
 
 export async function listEnquiries() {
   const { data } = await api.get<Enquiry[]>('/enquiries');
@@ -11,3 +12,13 @@ export async function updateEnquiryStatus(id: string, status: EnquiryStatus) {
   return data;
 }
 
+export type ConvertEnquiryPayload = {
+  studentName: string;
+  hourlyRate?: number;
+  notes?: string;
+};
+
+export async function convertEnquiryToStudent(id: string, payload: ConvertEnquiryPayload) {
+  const { data } = await api.post<{ enquiry: Enquiry; student: Student }>(`/enquiries/${id}/convert`, payload);
+  return data;
+}

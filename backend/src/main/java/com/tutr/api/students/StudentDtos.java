@@ -36,7 +36,7 @@ public final class StudentDtos {
             String notes,
             boolean active
     ) {
-        static StudentResponse from(Student student) {
+        public static StudentResponse from(Student student) {
             return new StudentResponse(
                     student.getId(),
                     student.getName(),
