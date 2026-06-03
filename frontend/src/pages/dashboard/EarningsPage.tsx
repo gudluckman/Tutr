@@ -163,11 +163,47 @@ export function EarningsPage() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 id="import-earnings-title" className="text-lg font-semibold text-foreground">Import historical earnings</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Use CSV headers: Start Date, End Date, Weekly Hours, Weekly Income.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Upload weekly earnings history using the exact column names below.</p>
               </div>
-              <button type="button" className="button-secondary h-9 w-9 p-0" onClick={() => { setShowImportModal(false); setFile(null); }} aria-label="Close import form">
-                <Icon name="x" className="h-4 w-4" />
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-white text-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => { setShowImportModal(false); setFile(null); }}
+                aria-label="Close import form"
+                title="Close"
+              >
+                <Icon name="x" className="h-5 w-5" />
               </button>
+            </div>
+
+            <div className="mb-4 overflow-hidden rounded-md border border-border">
+              <div className="bg-muted px-3 py-2 text-xs font-medium text-foreground">Required CSV format</div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-xs">
+                  <thead className="border-b border-border bg-white">
+                    <tr>
+                      <FormatTh>Start Date</FormatTh>
+                      <FormatTh>End Date</FormatTh>
+                      <FormatTh>Weekly Hours</FormatTh>
+                      <FormatTh>Weekly Income</FormatTh>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-card text-muted-foreground">
+                    <tr className="border-b border-border">
+                      <FormatTd>25/05/2026</FormatTd>
+                      <FormatTd>31/05/2026</FormatTd>
+                      <FormatTd>5</FormatTd>
+                      <FormatTd>350</FormatTd>
+                    </tr>
+                    <tr>
+                      <FormatTd>18/05/2026</FormatTd>
+                      <FormatTd>24/05/2026</FormatTd>
+                      <FormatTd>6</FormatTd>
+                      <FormatTd>420</FormatTd>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 py-5 text-center transition-colors hover:bg-muted">
@@ -184,11 +220,6 @@ export function EarningsPage() {
                 }}
               />
             </label>
-
-            <div className="mt-4 rounded-md bg-muted/60 p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-foreground">Example</p>
-              <p className="mt-1 font-mono">25/05/2026,31/05/2026,5,350</p>
-            </div>
 
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button type="button" className="button-secondary" onClick={() => { setShowImportModal(false); setFile(null); }}>Cancel</button>
@@ -218,6 +249,14 @@ function OverviewStat({ icon, label, value }: { icon: IconName; label: string; v
 
 function Th({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' }) {
   return <th className={`px-6 py-3 text-sm font-medium text-foreground ${align === 'right' ? 'text-right' : 'text-left'}`}>{children}</th>;
+}
+
+function FormatTh({ children }: { children: React.ReactNode }) {
+  return <th className="px-3 py-2 font-semibold text-foreground">{children}</th>;
+}
+
+function FormatTd({ children }: { children: React.ReactNode }) {
+  return <td className="px-3 py-2 font-mono">{children}</td>;
 }
 
 function dateLabel(date: string) {
