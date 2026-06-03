@@ -58,8 +58,9 @@ public class AnalyticsController {
     @PostMapping("/earnings/import")
     ImportEarningsResponse importEarnings(
             @AuthenticationPrincipal User user,
-            @RequestParam("file") MultipartFile file
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(defaultValue = "false") boolean replaceExisting
     ) {
-        return service.importEarnings(user, file);
+        return service.importEarnings(user, file, replaceExisting);
     }
 }

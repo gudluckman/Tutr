@@ -14,6 +14,7 @@ export function EarningsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<ImportEarningsResponse | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [replaceExistingImports, setReplaceExistingImports] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const earnings = useQuery({
     queryKey: ['earnings', page],
@@ -21,11 +22,14 @@ export function EarningsPage() {
     placeholderData: (previousData) => previousData,
   });
   const importCsv = useMutation({
-    mutationFn: (selectedFile: File) => importEarningsCsv(selectedFile),
+    mutationFn: ({ selectedFile, replaceExisting }: { selectedFile: File; replaceExisting: boolean }) => (
+      importEarningsCsv(selectedFile, replaceExisting)
+    ),
     onSuccess: (result) => {
       setImportResult(result);
       setFile(null);
       setShowImportModal(false);
+      setReplaceExistingImports(false);
       setPage(0);
       queryClient.invalidateQueries({ queryKey: ['earnings'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
@@ -108,6 +112,7 @@ export function EarningsPage() {
               onClick={() => {
                 setShowImportModal(true);
                 setImportResult(null);
+                setReplaceExistingImports(false);
               }}
             >
               <Icon name="upload" className="h-4 w-4" />
@@ -122,7 +127,7 @@ export function EarningsPage() {
             </p>
             {importResult.errors.length > 0 && (
               <div className="mt-2 text-destructive">
-                <p className="font-medium">Some rows were skipped:</p>
+                <p className="font-medium">Import notes:</p>
                 <ul className="mt-1 list-disc space-y-1 pl-5">
                   {importResult.errors.slice(0, 6).map((error) => <li key={error}>{error}</li>)}
                 </ul>
@@ -200,7 +205,7 @@ export function EarningsPage() {
             className="w-full rounded-t-lg border border-border bg-card p-5 shadow-xl sm:mx-auto sm:max-w-lg sm:rounded-lg"
             onSubmit={(event) => {
               event.preventDefault();
-              if (file) importCsv.mutate(file);
+              if (file) importCsv.mutate({ selectedFile: file, replaceExisting: replaceExistingImports });
             }}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
@@ -211,7 +216,7 @@ export function EarningsPage() {
               <button
                 type="button"
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-white text-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground"
-                onClick={() => { setShowImportModal(false); setFile(null); }}
+                onClick={() => { setShowImportModal(false); setFile(null); setReplaceExistingImports(false); }}
                 aria-label="Close import form"
                 title="Close"
               >
@@ -264,11 +269,26 @@ export function EarningsPage() {
               />
             </label>
 
+            <label className="mt-4 flex items-start gap-3 rounded-md border border-yellow-200 bg-yellow-50 p-3">
+              <input
+                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                type="checkbox"
+                checked={replaceExistingImports}
+                onChange={(event) => setReplaceExistingImports(event.target.checked)}
+              />
+              <span>
+                <span className="block text-sm font-medium text-foreground">Replace existing imported earnings</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Use this when fixing a previous upload. Tutr validates the CSV first, then replaces only imported history with this file.
+                </span>
+              </span>
+            </label>
+
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button type="button" className="button-secondary" onClick={() => { setShowImportModal(false); setFile(null); }}>Cancel</button>
+              <button type="button" className="button-secondary" onClick={() => { setShowImportModal(false); setFile(null); setReplaceExistingImports(false); }}>Cancel</button>
               <button type="submit" className="button gap-2" disabled={!file || importCsv.isPending}>
                 <Icon name="check" className="h-4 w-4" />
-                {importCsv.isPending ? 'Importing...' : 'Confirm import'}
+                {importCsv.isPending ? 'Importing...' : replaceExistingImports ? 'Replace imported history' : 'Confirm import'}
               </button>
             </div>
           </form>

@@ -166,12 +166,13 @@ public class AnalyticsService {
     }
 
     @Transactional
-    public ImportEarningsResponse importEarnings(User tutor, MultipartFile file) {
+    public ImportEarningsResponse importEarnings(User tutor, MultipartFile file, boolean replaceExisting) {
         if (file == null || file.isEmpty()) {
             return new ImportEarningsResponse(0, 0, List.of("Choose a CSV file to import."));
         }
 
         List<String> errors = new ArrayList<>();
+        List<String> blockingErrors = new ArrayList<>();
         int importedRows = 0;
         int updatedRows = 0;
         Map<ImportedWeekKey, ParsedEarning> parsedRows = new LinkedHashMap<>();
@@ -190,10 +191,10 @@ public class AnalyticsService {
                 }
                 List<String> columns = parseCsvLine(line);
                 if (columns.size() != IMPORT_HEADERS.size()) {
-                    errors.add("Line " + lineNumber + ": expected 4 columns.");
+                    addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": expected 4 columns.");
                     continue;
                 }
-                ParsedEarning parsed = parseEarning(lineNumber, columns, errors);
+                ParsedEarning parsed = parseEarning(lineNumber, columns, errors, blockingErrors);
                 if (parsed == null) {
                     continue;
                 }
@@ -202,6 +203,15 @@ public class AnalyticsService {
                     errors.add("Line " + lineNumber + ": duplicate week range was merged with an earlier row.");
                 }
                 parsedRows.merge(key, parsed, ParsedEarning::add);
+            }
+
+            if (replaceExisting && !blockingErrors.isEmpty()) {
+                errors.add("No existing imported earnings were replaced because the CSV has row errors.");
+                return new ImportEarningsResponse(0, 0, errors);
+            }
+
+            if (replaceExisting) {
+                importedEarnings.deleteByTutor(tutor);
             }
 
             for (ParsedEarning parsed : parsedRows.values()) {
@@ -228,42 +238,47 @@ public class AnalyticsService {
         return new ImportEarningsResponse(importedRows, updatedRows, errors);
     }
 
-    private ParsedEarning parseEarning(int lineNumber, List<String> columns, List<String> errors) {
-        LocalDate startDate = parseDate(lineNumber, "Start Date", columns.get(0), errors);
-        LocalDate endDate = parseDate(lineNumber, "End Date", columns.get(1), errors);
-        BigDecimal weeklyHours = parsePositiveDecimal(lineNumber, "Weekly Hours", columns.get(2), errors);
-        BigDecimal weeklyIncome = parsePositiveDecimal(lineNumber, "Weekly Income", columns.get(3), errors);
+    private ParsedEarning parseEarning(int lineNumber, List<String> columns, List<String> errors, List<String> blockingErrors) {
+        LocalDate startDate = parseDate(lineNumber, "Start Date", columns.get(0), errors, blockingErrors);
+        LocalDate endDate = parseDate(lineNumber, "End Date", columns.get(1), errors, blockingErrors);
+        BigDecimal weeklyHours = parsePositiveDecimal(lineNumber, "Weekly Hours", columns.get(2), errors, blockingErrors);
+        BigDecimal weeklyIncome = parsePositiveDecimal(lineNumber, "Weekly Income", columns.get(3), errors, blockingErrors);
         if (startDate == null || endDate == null || weeklyHours == null || weeklyIncome == null) {
             return null;
         }
         if (endDate.isBefore(startDate)) {
-            errors.add("Line " + lineNumber + ": End Date must be on or after Start Date.");
+            addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": End Date must be on or after Start Date.");
             return null;
         }
         return new ParsedEarning(startDate, endDate, weeklyHours, weeklyIncome);
     }
 
-    private LocalDate parseDate(int lineNumber, String label, String value, List<String> errors) {
+    private LocalDate parseDate(int lineNumber, String label, String value, List<String> errors, List<String> blockingErrors) {
         try {
             return LocalDate.parse(value.trim(), IMPORT_DATE_FORMAT);
         } catch (DateTimeParseException ex) {
-            errors.add("Line " + lineNumber + ": " + label + " must use dd/MM/yyyy.");
+            addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": " + label + " must use dd/MM/yyyy.");
             return null;
         }
     }
 
-    private BigDecimal parsePositiveDecimal(int lineNumber, String label, String value, List<String> errors) {
+    private BigDecimal parsePositiveDecimal(int lineNumber, String label, String value, List<String> errors, List<String> blockingErrors) {
         try {
             BigDecimal decimal = new BigDecimal(value.trim());
             if (decimal.signum() < 0) {
-                errors.add("Line " + lineNumber + ": " + label + " cannot be negative.");
+                addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": " + label + " cannot be negative.");
                 return null;
             }
             return decimal.setScale(2, RoundingMode.HALF_UP);
         } catch (NumberFormatException ex) {
-            errors.add("Line " + lineNumber + ": " + label + " must be a number.");
+            addBlockingError(errors, blockingErrors, "Line " + lineNumber + ": " + label + " must be a number.");
             return null;
         }
+    }
+
+    private void addBlockingError(List<String> errors, List<String> blockingErrors, String message) {
+        errors.add(message);
+        blockingErrors.add(message);
     }
 
     private List<String> parseCsvLine(String line) {

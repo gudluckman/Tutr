@@ -12,4 +12,6 @@ public interface ImportedEarningRepository extends JpaRepository<ImportedEarning
     List<ImportedEarning> findByTutorOrderByStartDateDesc(User tutor);
 
     Optional<ImportedEarning> findByTutorAndStartDateAndEndDate(User tutor, LocalDate startDate, LocalDate endDate);
+
+    void deleteByTutor(User tutor);
 }

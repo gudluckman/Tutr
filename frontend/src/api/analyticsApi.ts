@@ -11,10 +11,12 @@ export async function getEarnings(page: number) {
   return data;
 }
 
-export async function importEarningsCsv(file: File) {
+export async function importEarningsCsv(file: File, replaceExisting = false) {
   const formData = new FormData();
   formData.append('file', file);
-  const { data } = await api.post<ImportEarningsResponse>('/analytics/earnings/import', formData);
+  const { data } = await api.post<ImportEarningsResponse>('/analytics/earnings/import', formData, {
+    params: { replaceExisting },
+  });
   return data;
 }
 
