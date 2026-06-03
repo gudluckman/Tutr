@@ -1,3 +1,13 @@
+TRUNCATE TABLE
+  google_calendar_connections,
+  lesson_series,
+  lessons,
+  enquiries,
+  students,
+  tutor_profiles,
+  users
+RESTART IDENTITY CASCADE;
+
 INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
 VALUES
   ('11111111-1111-1111-1111-111111111111', 'sarah.chen@tutr.dev', '$2a$10$KGrLOavRO.z/x9pyyYuMfe.eUe2dCKwdaq2Qzx2CEuYogX0.YodF.', 'TUTOR', '2024-01-15T00:00:00Z', now()),

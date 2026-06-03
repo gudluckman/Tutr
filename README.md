@@ -28,7 +28,13 @@ cd backend
 SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 ```
 
-The local profile loads repeatable sample data from `backend/src/main/resources/data.sql` on startup. You can log into the seeded tutor dashboard with:
+Local and dev databases start empty after Flyway migrations. To load repeatable local sample data on demand, start the Docker Postgres container and run:
+
+```bash
+./backend/scripts/seed-local-db.sh
+```
+
+The seed script resets local app tables and loads demo tutors, students, enquiries, lessons, and analytics data. You can then log into the seeded tutor dashboard with:
 
 ```text
 Email: sarah.chen@tutr.dev

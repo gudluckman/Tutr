@@ -9,4 +9,4 @@ spring:
     password: ${DATABASE_PASSWORD:tutr_password}
   sql:
     init:
-      mode: always
+      mode: never
