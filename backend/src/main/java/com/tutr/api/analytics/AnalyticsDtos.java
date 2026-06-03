@@ -52,6 +52,8 @@ public final class AnalyticsDtos {
             BigDecimal totalHours,
             BigDecimal averageHourlyRate,
             List<WeeklyEarning> weeks,
+            List<Integer> availableYears,
+            List<String> availableMonths,
             int page,
             int pageSize,
             int totalPages,

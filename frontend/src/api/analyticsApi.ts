@@ -7,8 +7,8 @@ export async function getAnalyticsSummary(period: RevenuePeriod) {
   return data;
 }
 
-export async function getEarnings(page: number) {
-  const { data } = await api.get<EarningsResponse>('/analytics/earnings', { params: { page } });
+export async function getEarnings(page: number, year?: number, month?: number) {
+  const { data } = await api.get<EarningsResponse>('/analytics/earnings', { params: { page, year, month } });
   return data;
 }
 
@@ -29,7 +29,7 @@ export async function importEarningsCsv(file: File, replaceExisting = false, onP
   return data;
 }
 
-export async function exportEarningsCsv() {
-  const response = await api.get<Blob>('/analytics/earnings/export', { responseType: 'blob' });
+export async function exportEarningsCsv(year?: number, month?: number) {
+  const response = await api.get<Blob>('/analytics/earnings/export', { params: { year, month }, responseType: 'blob' });
   return response.status === 204 ? null : response.data;
 }

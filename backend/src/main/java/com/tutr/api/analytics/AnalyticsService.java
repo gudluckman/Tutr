@@ -86,37 +86,51 @@ public class AnalyticsService {
         );
     }
 
-    public EarningsResponse earnings(User tutor, int requestedPage, int requestedPageSize) {
+    public EarningsResponse earnings(User tutor, int requestedPage, int requestedPageSize, Integer requestedYear, Integer requestedMonth) {
         int pageSize = Math.max(1, Math.min(requestedPageSize, 52));
         List<WeeklyEarning> allWeeks = weeklyEarnings(tutor);
-        BigDecimal combinedTotalEarnings = allWeeks.stream()
+        List<Integer> availableYears = allWeeks.stream()
+                .map(week -> week.weekStart().getYear())
+                .distinct()
+                .sorted(Comparator.reverseOrder())
+                .toList();
+        List<String> availableMonths = allWeeks.stream()
+                .filter(week -> requestedYear == null || week.weekStart().getYear() == requestedYear)
+                .map(week -> week.weekStart().withDayOfMonth(1).toString().substring(0, 7))
+                .distinct()
+                .sorted(Comparator.reverseOrder())
+                .toList();
+        List<WeeklyEarning> filteredWeeks = filterWeeklyEarnings(allWeeks, requestedYear, requestedMonth);
+        BigDecimal combinedTotalEarnings = filteredWeeks.stream()
                 .map(WeeklyEarning::income)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal combinedTotalHours = allWeeks.stream()
+        BigDecimal combinedTotalHours = filteredWeeks.stream()
                 .map(WeeklyEarning::hours)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal combinedAverageHourlyRate = combinedTotalHours.signum() == 0
                 ? BigDecimal.ZERO
                 : combinedTotalEarnings.divide(combinedTotalHours, 2, RoundingMode.HALF_UP);
 
-        int totalPages = allWeeks.isEmpty() ? 0 : (allWeeks.size() + pageSize - 1) / pageSize;
+        int totalPages = filteredWeeks.isEmpty() ? 0 : (filteredWeeks.size() + pageSize - 1) / pageSize;
         int page = totalPages == 0 ? 0 : Math.max(0, Math.min(requestedPage, totalPages - 1));
-        int fromIndex = Math.min(page * pageSize, allWeeks.size());
-        int toIndex = Math.min(fromIndex + pageSize, allWeeks.size());
+        int fromIndex = Math.min(page * pageSize, filteredWeeks.size());
+        int toIndex = Math.min(fromIndex + pageSize, filteredWeeks.size());
         return new EarningsResponse(
                 combinedTotalEarnings,
                 combinedTotalHours,
                 combinedAverageHourlyRate,
-                allWeeks.subList(fromIndex, toIndex),
+                filteredWeeks.subList(fromIndex, toIndex),
+                availableYears,
+                availableMonths,
                 page,
                 pageSize,
                 totalPages,
-                allWeeks.size()
+                filteredWeeks.size()
         );
     }
 
-    public String exportEarningsCsv(User tutor) {
-        List<WeeklyEarning> weeks = weeklyEarnings(tutor);
+    public String exportEarningsCsv(User tutor, Integer year, Integer month) {
+        List<WeeklyEarning> weeks = filterWeeklyEarnings(weeklyEarnings(tutor), year, month);
         if (weeks.isEmpty()) {
             return "";
         }
@@ -139,6 +153,13 @@ public class AnalyticsService {
                 .append(csvValue(week.importedIncome()))
                 .append('\n'));
         return csv.toString();
+    }
+
+    private List<WeeklyEarning> filterWeeklyEarnings(List<WeeklyEarning> weeks, Integer year, Integer month) {
+        return weeks.stream()
+                .filter(week -> year == null || week.weekStart().getYear() == year)
+                .filter(week -> month == null || week.weekStart().getMonthValue() == month)
+                .toList();
     }
 
     private List<WeeklyEarning> weeklyEarnings(User tutor) {
@@ -188,24 +209,22 @@ public class AnalyticsService {
             }
 
             String line;
-            int lineNumber = 1;
             while ((line = reader.readLine()) != null) {
-                lineNumber++;
                 if (line.isBlank()) {
                     continue;
                 }
                 List<String> columns = parseCsvLine(line);
                 if (columns.size() != IMPORT_HEADERS.size()) {
-                    errors.add("Line " + lineNumber + ": expected 4 columns.");
+                    errors.add("Row \"" + csvSnippet(line) + "\": expected 4 columns.");
                     continue;
                 }
-                ParsedEarning parsed = parseEarning(lineNumber, columns, errors);
+                ParsedEarning parsed = parseEarning(columns, errors);
                 if (parsed == null) {
                     continue;
                 }
                 ImportedWeekKey key = new ImportedWeekKey(parsed.startDate(), parsed.endDate());
                 if (parsedRows.containsKey(key)) {
-                    errors.add("Line " + lineNumber + ": duplicate week range. Remove or combine this week before uploading.");
+                    errors.add("Row \"" + csvSnippet(columns) + "\": duplicate week range. Remove or combine this week before uploading.");
                     continue;
                 }
                 parsedRows.put(key, parsed);
@@ -248,80 +267,93 @@ public class AnalyticsService {
         return new ImportEarningsResponse(importedRows, updatedRows, errors);
     }
 
-    private ParsedEarning parseEarning(int lineNumber, List<String> columns, List<String> errors) {
+    private ParsedEarning parseEarning(List<String> columns, List<String> errors) {
+        String rowSnippet = csvSnippet(columns);
         for (int i = 0; i < IMPORT_HEADERS.size(); i++) {
             if (columns.get(i).isBlank()) {
-                errors.add("Line " + lineNumber + ": " + IMPORT_HEADERS.get(i) + " cannot be blank.");
+                errors.add("Row \"" + rowSnippet + "\": " + IMPORT_HEADERS.get(i) + " cannot be blank.");
             }
         }
         if (columns.stream().anyMatch(String::isBlank)) {
             return null;
         }
 
-        LocalDate startDate = parseDate(lineNumber, "Start Date", columns.get(0), errors);
-        LocalDate endDate = parseDate(lineNumber, "End Date", columns.get(1), errors);
-        BigDecimal weeklyHours = parsePositiveDecimal(lineNumber, "Weekly Hours", columns.get(2), MAX_WEEKLY_HOURS, errors);
-        BigDecimal weeklyIncome = parsePositiveDecimal(lineNumber, "Weekly Income", columns.get(3), MAX_WEEKLY_INCOME, errors);
+        LocalDate startDate = parseDate(rowSnippet, "Start Date", columns.get(0), errors);
+        LocalDate endDate = parseDate(rowSnippet, "End Date", columns.get(1), errors);
+        BigDecimal weeklyHours = parsePositiveDecimal(rowSnippet, "Weekly Hours", columns.get(2), MAX_WEEKLY_HOURS, errors);
+        BigDecimal weeklyIncome = parsePositiveDecimal(rowSnippet, "Weekly Income", columns.get(3), MAX_WEEKLY_INCOME, errors);
         if (startDate == null || endDate == null || weeklyHours == null || weeklyIncome == null) {
             return null;
         }
         if (!endDate.isAfter(startDate)) {
-            errors.add("Line " + lineNumber + ": End Date must be after Start Date.");
+            errors.add("Row \"" + rowSnippet + "\": End Date must be after Start Date.");
             return null;
         }
         if (startDate.getDayOfWeek() != DayOfWeek.MONDAY || endDate.getDayOfWeek() != DayOfWeek.SUNDAY) {
-            errors.add("Line " + lineNumber + ": imported weeks must run Monday to Sunday.");
+            errors.add("Row \"" + rowSnippet + "\": imported weeks must run Monday to Sunday.");
             return null;
         }
         if (!endDate.equals(startDate.plusDays(6))) {
-            errors.add("Line " + lineNumber + ": End Date must be exactly 6 days after Start Date.");
+            errors.add("Row \"" + rowSnippet + "\": End Date must be exactly 6 days after Start Date.");
             return null;
         }
         if (startDate.getYear() < MIN_IMPORT_YEAR) {
-            errors.add("Line " + lineNumber + ": Start Date year must be " + MIN_IMPORT_YEAR + " or later.");
+            errors.add("Row \"" + rowSnippet + "\": Start Date year must be " + MIN_IMPORT_YEAR + " or later.");
             return null;
         }
         if (endDate.isAfter(LocalDate.now(ANALYTICS_TIME_ZONE))) {
-            errors.add("Line " + lineNumber + ": imported earning weeks cannot end in the future.");
+            errors.add("Row \"" + rowSnippet + "\": imported earning weeks cannot end in the future.");
             return null;
         }
         return new ParsedEarning(startDate, endDate, weeklyHours, weeklyIncome);
     }
 
-    private LocalDate parseDate(int lineNumber, String label, String value, List<String> errors) {
+    private LocalDate parseDate(String rowSnippet, String label, String value, List<String> errors) {
         try {
             return LocalDate.parse(value.trim(), IMPORT_DATE_FORMAT);
         } catch (DateTimeParseException ex) {
-            errors.add("Line " + lineNumber + ": " + label + " must be a real date using dd/MM/yyyy.");
+            errors.add("Row \"" + rowSnippet + "\": " + label + " must be a real date using dd/MM/yyyy.");
             return null;
         }
     }
 
-    private BigDecimal parsePositiveDecimal(int lineNumber, String label, String value, BigDecimal maximum, List<String> errors) {
+    private BigDecimal parsePositiveDecimal(String rowSnippet, String label, String value, BigDecimal maximum, List<String> errors) {
         String trimmed = value.trim();
         if (!IMPORT_DECIMAL.matcher(trimmed).matches()) {
-            errors.add("Line " + lineNumber + ": " + label + " must be a non-negative number with up to 2 decimal places.");
+            errors.add("Row \"" + rowSnippet + "\": " + label + " must be a non-negative number with up to 2 decimal places.");
             return null;
         }
         try {
             BigDecimal decimal = new BigDecimal(trimmed);
             if (decimal.signum() < 0) {
-                errors.add("Line " + lineNumber + ": " + label + " cannot be negative.");
+                errors.add("Row \"" + rowSnippet + "\": " + label + " cannot be negative.");
                 return null;
             }
             if (decimal.compareTo(maximum) > 0) {
-                errors.add("Line " + lineNumber + ": " + label + " looks too high. Maximum allowed is " + maximum.toPlainString() + ".");
+                errors.add("Row \"" + rowSnippet + "\": " + label + " looks too high. Maximum allowed is " + maximum.toPlainString() + ".");
                 return null;
             }
             return decimal.setScale(2, RoundingMode.HALF_UP);
         } catch (NumberFormatException ex) {
-            errors.add("Line " + lineNumber + ": " + label + " must be a number.");
+            errors.add("Row \"" + rowSnippet + "\": " + label + " must be a number.");
             return null;
         }
     }
 
     private String stripBom(String value) {
         return value.startsWith("\uFEFF") ? value.substring(1) : value;
+    }
+
+    private String csvSnippet(List<String> values) {
+        return csvSnippet(String.join(", ", values));
+    }
+
+    private String csvSnippet(String value) {
+        String compact = value.replaceAll("\\s+", " ").trim();
+        if (compact.length() <= 120) {
+            return compact;
+        }
+        return compact.substring(0, 117) + "...";
     }
 
     private List<String> parseCsvLine(String line) {

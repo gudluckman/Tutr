@@ -11,6 +11,8 @@ const hours = new Intl.NumberFormat('en-AU', { maximumFractionDigits: 2 });
 export function EarningsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<ImportEarningsResponse | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -18,8 +20,8 @@ export function EarningsPage() {
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const earnings = useQuery({
-    queryKey: ['earnings', page],
-    queryFn: () => getEarnings(page),
+    queryKey: ['earnings', page, selectedYear, selectedMonth],
+    queryFn: () => getEarnings(page, numberOrUndefined(selectedYear), numberOrUndefined(selectedMonth)),
     placeholderData: (previousData) => previousData,
   });
   const importCsv = useMutation({
@@ -48,7 +50,7 @@ export function EarningsPage() {
     },
   });
   const exportCsv = useMutation({
-    mutationFn: exportEarningsCsv,
+    mutationFn: () => exportEarningsCsv(numberOrUndefined(selectedYear), numberOrUndefined(selectedMonth)),
     onSuccess: (blob) => {
       if (!blob) {
         setExportMessage('No earning weeks to export yet.');
@@ -57,13 +59,18 @@ export function EarningsPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `tutr_earnings_until_${exportDateStamp()}.csv`;
+      link.download = exportFilename(selectedYear, selectedMonth);
       link.click();
       URL.revokeObjectURL(url);
       setExportMessage(null);
     },
   });
   const data = earnings.data;
+  const rangeLabel = selectedYear
+    ? selectedMonth
+      ? monthLabel(`${selectedYear}-${selectedMonth.padStart(2, '0')}`)
+      : selectedYear
+    : 'all time';
 
   const handleExport = () => {
     if (!data || data.totalWeeks === 0) {
@@ -156,9 +163,37 @@ export function EarningsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Weekly income</h2>
-            <p className="text-sm text-muted-foreground">{data?.totalWeeks ?? 0} earning weeks recorded</p>
+            <p className="text-sm text-muted-foreground">{data?.totalWeeks ?? 0} earning weeks recorded for {rangeLabel}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <select
+              className="h-10 rounded-md border border-border bg-white px-3 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none"
+              value={selectedYear}
+              aria-label="Filter earnings by year"
+              onChange={(event) => {
+                setSelectedYear(event.target.value);
+                setSelectedMonth('');
+                setPage(0);
+              }}
+            >
+              <option value="">All time</option>
+              {data?.availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
+            </select>
+            <select
+              className="h-10 rounded-md border border-border bg-white px-3 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              value={selectedMonth}
+              aria-label="Filter earnings by month"
+              disabled={!selectedYear}
+              onChange={(event) => {
+                setSelectedMonth(event.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="">All months</option>
+              {data?.availableMonths.map((month) => (
+                <option key={month} value={month.slice(5, 7)}>{monthLabel(month)}</option>
+              ))}
+            </select>
             <p className="text-sm text-muted-foreground">
               Page {data?.totalPages ? (data.page + 1) : 0} of {data?.totalPages ?? 0}
             </p>
@@ -373,6 +408,23 @@ function exportDateStamp() {
   const day = String(today.getDate()).padStart(2, '0');
   const month = String(today.getMonth() + 1).padStart(2, '0');
   return `${day}-${month}-${today.getFullYear()}`;
+}
+
+function exportFilename(year: string, month: string) {
+  const range = year
+    ? month
+      ? `${year}-${month.padStart(2, '0')}`
+      : year
+    : 'all_time';
+  return `tutr_earnings_${range}_until_${exportDateStamp()}.csv`;
+}
+
+function monthLabel(month: string) {
+  return new Date(`${month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+}
+
+function numberOrUndefined(value: string) {
+  return value ? Number(value) : undefined;
 }
 
 const csvTemplate = [
