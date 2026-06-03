@@ -32,7 +32,18 @@ public final class AnalyticsDtos {
             LocalDate weekStart,
             LocalDate weekEnd,
             BigDecimal hours,
-            BigDecimal income
+            BigDecimal income,
+            BigDecimal lessonHours,
+            BigDecimal lessonIncome,
+            BigDecimal importedHours,
+            BigDecimal importedIncome
+    ) {
+    }
+
+    public record ImportEarningsResponse(
+            int importedRows,
+            int updatedRows,
+            List<String> errors
     ) {
     }
 

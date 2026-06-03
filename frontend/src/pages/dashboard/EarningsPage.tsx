@@ -1,18 +1,32 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getEarnings } from '../../api/analyticsApi';
+import { getEarnings, importEarningsCsv } from '../../api/analyticsApi';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon, type IconName } from '../../components/ui/Icon';
+import type { ImportEarningsResponse } from '../../types/analytics';
 
 const money = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
 const hours = new Intl.NumberFormat('en-AU', { maximumFractionDigits: 2 });
 
 export function EarningsPage() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
+  const [file, setFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<ImportEarningsResponse | null>(null);
   const earnings = useQuery({
     queryKey: ['earnings', page],
     queryFn: () => getEarnings(page),
     placeholderData: (previousData) => previousData,
+  });
+  const importCsv = useMutation({
+    mutationFn: (selectedFile: File) => importEarningsCsv(selectedFile),
+    onSuccess: (result) => {
+      setImportResult(result);
+      setFile(null);
+      setPage(0);
+      queryClient.invalidateQueries({ queryKey: ['earnings'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    },
   });
   const data = earnings.data;
 
@@ -24,12 +38,63 @@ export function EarningsPage() {
       </div>
 
       <ErrorAlert className="mb-6" error={earnings.error} fallback="Could not load your earnings. Please refresh the page." />
+      <ErrorAlert className="mb-6" error={importCsv.error} fallback="Could not import the CSV file. Please check the format and try again." />
 
       <div className="mb-8 grid gap-4 md:grid-cols-3">
         <OverviewStat icon="dollar" label="Total earnings" value={money.format(data?.totalEarnings ?? 0)} />
         <OverviewStat icon="clock" label="Total hours" value={`${hours.format(data?.totalHours ?? 0)} hrs`} />
         <OverviewStat icon="dashboard" label="Average hourly rate" value={`${money.format(data?.averageHourlyRate ?? 0)}/hr`} />
       </div>
+
+      <section className="mb-8 rounded-lg border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Import historical earnings</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Upload a CSV with Start Date, End Date, Weekly Hours, Weekly Income.</p>
+          </div>
+          <form
+            className="flex flex-col gap-3 sm:flex-row sm:items-center"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (file) importCsv.mutate(file);
+            }}
+          >
+            <label className="button-secondary cursor-pointer gap-2">
+              <Icon name="upload" className="h-4 w-4" />
+              {file ? file.name : 'Choose CSV'}
+              <input
+                className="sr-only"
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setImportResult(null);
+                }}
+              />
+            </label>
+            <button className="button gap-2" disabled={!file || importCsv.isPending} type="submit">
+              <Icon name="check" className="h-4 w-4" />
+              {importCsv.isPending ? 'Importing...' : 'Import'}
+            </button>
+          </form>
+        </div>
+
+        {importResult && (
+          <div className="mt-4 rounded-lg bg-muted/60 p-3 text-sm">
+            <p className="font-medium text-foreground">
+              Imported {importResult.importedRows} new rows and updated {importResult.updatedRows} existing rows.
+            </p>
+            {importResult.errors.length > 0 && (
+              <div className="mt-2 text-destructive">
+                <p className="font-medium">Some rows were skipped:</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {importResult.errors.slice(0, 6).map((error) => <li key={error}>{error}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       <section className="overflow-hidden rounded-lg border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
@@ -56,7 +121,11 @@ export function EarningsPage() {
                 <tr key={week.weekStart} className="border-b border-border last:border-0 hover:bg-muted/40">
                   <td className="px-6 py-4">
                     <p className="font-medium text-foreground">Monday, {dateLabel(week.weekStart)} - Sunday, {dateLabel(week.weekEnd)}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">Monday to Sunday</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {week.importedIncome > 0
+                        ? `${money.format(week.importedIncome)} imported, ${money.format(week.lessonIncome)} from Tutr lessons`
+                        : 'Monday to Sunday'}
+                    </p>
                   </td>
                   <td className="px-6 py-4 text-foreground">{hours.format(week.hours)} hrs</td>
                   <td className="px-6 py-4 text-right font-semibold text-foreground">{money.format(week.income)}</td>

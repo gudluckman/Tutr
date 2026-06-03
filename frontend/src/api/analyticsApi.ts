@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AnalyticsSummary, EarningsResponse, RevenuePeriod } from '../types/analytics';
+import type { AnalyticsSummary, EarningsResponse, ImportEarningsResponse, RevenuePeriod } from '../types/analytics';
 
 export async function getAnalyticsSummary(period: RevenuePeriod) {
   const { data } = await api.get<AnalyticsSummary>('/analytics/summary', { params: { period } });
@@ -8,5 +8,12 @@ export async function getAnalyticsSummary(period: RevenuePeriod) {
 
 export async function getEarnings(page: number) {
   const { data } = await api.get<EarningsResponse>('/analytics/earnings', { params: { page } });
+  return data;
+}
+
+export async function importEarningsCsv(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await api.post<ImportEarningsResponse>('/analytics/earnings/import', formData);
   return data;
 }

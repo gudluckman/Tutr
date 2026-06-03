@@ -7,17 +7,27 @@ import com.tutr.api.lessons.PaymentStatus;
 import com.tutr.api.users.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static com.tutr.api.analytics.AnalyticsDtos.*;
@@ -26,8 +36,11 @@ import static com.tutr.api.analytics.AnalyticsDtos.*;
 @RequiredArgsConstructor
 public class AnalyticsService {
     private static final ZoneId ANALYTICS_TIME_ZONE = ZoneId.of("Australia/Sydney");
+    private static final DateTimeFormatter IMPORT_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final List<String> IMPORT_HEADERS = List.of("Start Date", "End Date", "Weekly Hours", "Weekly Income");
 
     private final LessonRepository lessons;
+    private final ImportedEarningRepository importedEarnings;
 
     public AnalyticsSummary summary(User tutor, RevenuePeriod period) {
         List<Lesson> all = lessons.findByTutorOrderByLessonDateDesc(tutor);
@@ -39,6 +52,11 @@ public class AnalyticsService {
                         lesson -> revenueKey(lesson, period),
                         Collectors.mapping(this::revenueTotals, Collectors.reducing(RevenueTotals.ZERO, RevenueTotals::add))
                 ));
+        importedEarnings.findByTutorOrderByStartDateDesc(tutor).forEach(imported -> {
+            String key = revenueKey(imported.getStartDate(), period);
+            RevenueTotals importedTotals = new RevenueTotals(imported.getWeeklyIncome(), imported.getWeeklyIncome(), BigDecimal.ZERO);
+            revenue.merge(key, importedTotals, RevenueTotals::add);
+        });
         RevenueTotals currentPeriod = revenue.getOrDefault(revenueKey(today, period), RevenueTotals.ZERO);
 
         return new AnalyticsSummary(
@@ -74,9 +92,6 @@ public class AnalyticsService {
         BigDecimal totalHours = paidLessons.stream()
                 .map(this::lessonHours)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal averageHourlyRate = totalHours.signum() == 0
-                ? BigDecimal.ZERO
-                : totalEarnings.divide(totalHours, 2, RoundingMode.HALF_UP);
 
         Map<LocalDate, List<Lesson>> lessonsByWeek = paidLessons.stream()
                 .collect(Collectors.groupingBy(
@@ -86,14 +101,33 @@ public class AnalyticsService {
                         Collectors.toList()
                 ));
 
-        List<WeeklyEarning> allWeeks = lessonsByWeek.entrySet().stream()
-                .sorted(Map.Entry.<LocalDate, List<Lesson>>comparingByKey().reversed())
-                .map(entry -> new WeeklyEarning(
-                        entry.getKey(),
-                        entry.getKey().plusDays(6),
-                        entry.getValue().stream().map(this::lessonHours).reduce(BigDecimal.ZERO, BigDecimal::add),
-                        entry.getValue().stream().map(this::lessonAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
-                ))
+        Map<LocalDate, WeeklyEarningTotals> weeklyTotals = new LinkedHashMap<>();
+        lessonsByWeek.forEach((weekStart, weekLessons) -> {
+            BigDecimal lessonHours = weekLessons.stream().map(this::lessonHours).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal lessonIncome = weekLessons.stream().map(this::lessonAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            weeklyTotals.computeIfAbsent(weekStart, WeeklyEarningTotals::new).addLessons(lessonHours, lessonIncome);
+        });
+        importedEarnings.findByTutorOrderByStartDateDesc(tutor).forEach(imported -> {
+            LocalDate weekStart = imported.getStartDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+            weeklyTotals.computeIfAbsent(weekStart, WeeklyEarningTotals::new)
+                    .addImported(imported.getWeeklyHours(), imported.getWeeklyIncome());
+        });
+
+        BigDecimal importedTotalEarnings = weeklyTotals.values().stream()
+                .map(WeeklyEarningTotals::importedIncome)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal importedTotalHours = weeklyTotals.values().stream()
+                .map(WeeklyEarningTotals::importedHours)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal combinedTotalEarnings = totalEarnings.add(importedTotalEarnings);
+        BigDecimal combinedTotalHours = totalHours.add(importedTotalHours);
+        BigDecimal combinedAverageHourlyRate = combinedTotalHours.signum() == 0
+                ? BigDecimal.ZERO
+                : combinedTotalEarnings.divide(combinedTotalHours, 2, RoundingMode.HALF_UP);
+
+        List<WeeklyEarning> allWeeks = weeklyTotals.entrySet().stream()
+                .sorted(Map.Entry.<LocalDate, WeeklyEarningTotals>comparingByKey().reversed())
+                .map(entry -> entry.getValue().toResponse())
                 .toList();
 
         int totalPages = allWeeks.isEmpty() ? 0 : (allWeeks.size() + pageSize - 1) / pageSize;
@@ -101,15 +135,139 @@ public class AnalyticsService {
         int fromIndex = Math.min(page * pageSize, allWeeks.size());
         int toIndex = Math.min(fromIndex + pageSize, allWeeks.size());
         return new EarningsResponse(
-                totalEarnings,
-                totalHours,
-                averageHourlyRate,
+                combinedTotalEarnings,
+                combinedTotalHours,
+                combinedAverageHourlyRate,
                 allWeeks.subList(fromIndex, toIndex),
                 page,
                 pageSize,
                 totalPages,
                 allWeeks.size()
         );
+    }
+
+    @Transactional
+    public ImportEarningsResponse importEarnings(User tutor, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return new ImportEarningsResponse(0, 0, List.of("Choose a CSV file to import."));
+        }
+
+        List<String> errors = new ArrayList<>();
+        int importedRows = 0;
+        int updatedRows = 0;
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            String header = reader.readLine();
+            if (header == null || !IMPORT_HEADERS.equals(parseCsvLine(header).stream().map(String::trim).toList())) {
+                return new ImportEarningsResponse(0, 0, List.of("CSV headers must be: " + String.join(", ", IMPORT_HEADERS)));
+            }
+
+            String line;
+            int lineNumber = 1;
+            while ((line = reader.readLine()) != null) {
+                lineNumber++;
+                if (line.isBlank()) {
+                    continue;
+                }
+                List<String> columns = parseCsvLine(line);
+                if (columns.size() != IMPORT_HEADERS.size()) {
+                    errors.add("Line " + lineNumber + ": expected 4 columns.");
+                    continue;
+                }
+                ParsedEarning parsed = parseEarning(lineNumber, columns, errors);
+                if (parsed == null) {
+                    continue;
+                }
+
+                ImportedEarning earning = importedEarnings
+                        .findByTutorAndStartDateAndEndDate(tutor, parsed.startDate(), parsed.endDate())
+                        .orElseGet(ImportedEarning::new);
+                boolean existing = earning.getId() != null;
+                earning.setTutor(tutor);
+                earning.setStartDate(parsed.startDate());
+                earning.setEndDate(parsed.endDate());
+                earning.setWeeklyHours(parsed.weeklyHours());
+                earning.setWeeklyIncome(parsed.weeklyIncome());
+                earning.setSourceFilename(safeFilename(file.getOriginalFilename()));
+                importedEarnings.save(earning);
+                if (existing) {
+                    updatedRows++;
+                } else {
+                    importedRows++;
+                }
+            }
+        } catch (IOException ex) {
+            return new ImportEarningsResponse(0, 0, List.of("Could not read the uploaded CSV file."));
+        }
+        return new ImportEarningsResponse(importedRows, updatedRows, errors);
+    }
+
+    private ParsedEarning parseEarning(int lineNumber, List<String> columns, List<String> errors) {
+        LocalDate startDate = parseDate(lineNumber, "Start Date", columns.get(0), errors);
+        LocalDate endDate = parseDate(lineNumber, "End Date", columns.get(1), errors);
+        BigDecimal weeklyHours = parsePositiveDecimal(lineNumber, "Weekly Hours", columns.get(2), errors);
+        BigDecimal weeklyIncome = parsePositiveDecimal(lineNumber, "Weekly Income", columns.get(3), errors);
+        if (startDate == null || endDate == null || weeklyHours == null || weeklyIncome == null) {
+            return null;
+        }
+        if (endDate.isBefore(startDate)) {
+            errors.add("Line " + lineNumber + ": End Date must be on or after Start Date.");
+            return null;
+        }
+        return new ParsedEarning(startDate, endDate, weeklyHours, weeklyIncome);
+    }
+
+    private LocalDate parseDate(int lineNumber, String label, String value, List<String> errors) {
+        try {
+            return LocalDate.parse(value.trim(), IMPORT_DATE_FORMAT);
+        } catch (DateTimeParseException ex) {
+            errors.add("Line " + lineNumber + ": " + label + " must use dd/MM/yyyy.");
+            return null;
+        }
+    }
+
+    private BigDecimal parsePositiveDecimal(int lineNumber, String label, String value, List<String> errors) {
+        try {
+            BigDecimal decimal = new BigDecimal(value.trim());
+            if (decimal.signum() < 0) {
+                errors.add("Line " + lineNumber + ": " + label + " cannot be negative.");
+                return null;
+            }
+            return decimal.setScale(2, RoundingMode.HALF_UP);
+        } catch (NumberFormatException ex) {
+            errors.add("Line " + lineNumber + ": " + label + " must be a number.");
+            return null;
+        }
+    }
+
+    private List<String> parseCsvLine(String line) {
+        List<String> values = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean quoted = false;
+        for (int i = 0; i < line.length(); i++) {
+            char value = line.charAt(i);
+            if (value == '"') {
+                if (quoted && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    current.append('"');
+                    i++;
+                } else {
+                    quoted = !quoted;
+                }
+            } else if (value == ',' && !quoted) {
+                values.add(current.toString().trim());
+                current.setLength(0);
+            } else {
+                current.append(value);
+            }
+        }
+        values.add(current.toString().trim());
+        return values;
+    }
+
+    private String safeFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return null;
+        }
+        return Objects.requireNonNull(filename).replaceAll("[\\\\/]", "").trim();
     }
 
     private boolean isPaidLesson(Lesson lesson) {
@@ -159,6 +317,52 @@ public class AnalyticsService {
                     expectedRevenue.add(other.expectedRevenue),
                     paidRevenue.add(other.paidRevenue),
                     outstandingRevenue.add(other.outstandingRevenue)
+            );
+        }
+    }
+
+    private record ParsedEarning(LocalDate startDate, LocalDate endDate, BigDecimal weeklyHours, BigDecimal weeklyIncome) {
+    }
+
+    private static final class WeeklyEarningTotals {
+        private final LocalDate weekStart;
+        private BigDecimal lessonHours = BigDecimal.ZERO;
+        private BigDecimal lessonIncome = BigDecimal.ZERO;
+        private BigDecimal importedHours = BigDecimal.ZERO;
+        private BigDecimal importedIncome = BigDecimal.ZERO;
+
+        private WeeklyEarningTotals(LocalDate weekStart) {
+            this.weekStart = weekStart;
+        }
+
+        private void addLessons(BigDecimal hours, BigDecimal income) {
+            lessonHours = lessonHours.add(hours);
+            lessonIncome = lessonIncome.add(income);
+        }
+
+        private void addImported(BigDecimal hours, BigDecimal income) {
+            importedHours = importedHours.add(hours);
+            importedIncome = importedIncome.add(income);
+        }
+
+        private BigDecimal importedHours() {
+            return importedHours;
+        }
+
+        private BigDecimal importedIncome() {
+            return importedIncome;
+        }
+
+        private WeeklyEarning toResponse() {
+            return new WeeklyEarning(
+                    weekStart,
+                    weekStart.plusDays(6),
+                    lessonHours.add(importedHours),
+                    lessonIncome.add(importedIncome),
+                    lessonHours,
+                    lessonIncome,
+                    importedHours,
+                    importedIncome
             );
         }
     }

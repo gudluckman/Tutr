@@ -23,6 +23,10 @@ export type WeeklyEarning = {
   weekEnd: string;
   hours: number;
   income: number;
+  lessonHours: number;
+  lessonIncome: number;
+  importedHours: number;
+  importedIncome: number;
 };
 
 export type EarningsResponse = {
@@ -34,4 +38,10 @@ export type EarningsResponse = {
   pageSize: number;
   totalPages: number;
   totalWeeks: number;
+};
+
+export type ImportEarningsResponse = {
+  importedRows: number;
+  updatedRows: number;
+  errors: string[];
 };

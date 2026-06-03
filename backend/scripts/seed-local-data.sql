@@ -3,6 +3,7 @@ TRUNCATE TABLE
   lesson_series,
   lessons,
   enquiries,
+  imported_earnings,
   students,
   tutor_profiles,
   users

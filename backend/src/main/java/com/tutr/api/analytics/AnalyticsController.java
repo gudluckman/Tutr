@@ -4,9 +4,11 @@ import com.tutr.api.users.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import static com.tutr.api.analytics.AnalyticsDtos.*;
 
@@ -31,5 +33,13 @@ public class AnalyticsController {
             @RequestParam(defaultValue = "8") int pageSize
     ) {
         return service.earnings(user, page, pageSize);
+    }
+
+    @PostMapping("/earnings/import")
+    ImportEarningsResponse importEarnings(
+            @AuthenticationPrincipal User user,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return service.importEarnings(user, file);
     }
 }

@@ -157,8 +157,21 @@ For a dev deployment:
 - Tutor profile editing and publishing controls
 - Student CRUD for each tutor
 - Lesson CRUD with status and payment status
+- CSV import for historical weekly earnings
 - Enquiry inbox with status updates
 - Analytics summary for revenue, unpaid lessons, and lesson counts
+
+## Historical Earnings Import
+
+Tutors can import old weekly earnings from the Earnings dashboard using a CSV with these exact headers:
+
+```csv
+Start Date,End Date,Weekly Hours,Weekly Income
+25/05/2026,31/05/2026,5,350
+18/05/2026,24/05/2026,6,420
+```
+
+Dates must use `dd/MM/yyyy`. Imported weeks are merged into earnings totals and analytics revenue, while the weekly table still shows how much came from imported history versus Tutr lessons.
 
 ## Project Structure
 
