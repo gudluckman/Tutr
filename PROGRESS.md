@@ -153,8 +153,61 @@ payment state and follow-up work easier to understand at a glance.
 - Build a consolidated student overview with lessons, notes, homework, and
   balances.
 
+## 2026-06-03 - Beta Deployment And Earnings Import Polish
+
+### Completed
+
+- Prepared the MVP for beta deployment on Render using separate free backend
+  and frontend services.
+- Connected the deployed frontend to the Render backend API and fixed the
+  deployed tutor-search empty state behavior.
+- Moved mock/local seed data out of automatic startup and into
+  `backend/scripts/seed-local-data.sql`, so local and dev databases can start
+  empty unless the seed script is run.
+- Documented the local reset flow for starting with an empty database and
+  loading sample data only when needed.
+- Added historical earnings CSV import for tutors moving old weekly earnings
+  from spreadsheets into Tutr.
+- Added actual earnings CSV export from the user's current earnings table, with
+  timestamped filenames and empty-table handling.
+- Added a clearer CSV export icon and refined the historical earnings import
+  panel and modal.
+- Added a safe import replacement flow so tutors can fix a previous upload by
+  replacing imported history without touching Tutr lesson records.
+- Hardened CSV validation with all-or-nothing imports, strict weekly
+  Monday-to-Sunday rows, real dates, no blank values, non-negative numeric
+  hours and income, duplicate-week rejection, and guardrails for unusually large
+  values.
+- Kept CSV validation errors inside the import modal with upload progress and
+  row snippets that identify the problematic CSV values.
+- Added earnings filters for all time, recorded year, and recorded month, with
+  totals, pagination, and CSV export following the selected range.
+- Clarified Google Calendar OAuth deployment settings, including the production
+  redirect URI for Render.
+
+### Outcome
+
+Tutr is closer to beta-ready: deployed services behave more like local
+development, local sample data is no longer baked into every database startup,
+and tutors can safely bring in spreadsheet-based earning history, fix mistakes,
+filter earnings by recorded period, and export the exact view they are seeing.
+
+### Next
+
+- Rotate exposed Google OAuth credentials before broader beta testing.
+- Smoke-test the Render beta after each deploy: auth, tutor search, profile
+  publishing, lessons, earnings import/export, and Google Calendar connect.
+- Add one-click enquiry-to-student conversion with optional first-lesson
+  scheduling.
+- Expand payment tracking into a ledger with exact partial-payment amounts,
+  due dates, and outstanding balances.
+- Add configurable lesson and overdue-payment reminders.
+
 ## Current Focus
 
+- Stabilize the beta deployment and verify the full hosted workflow after each
+  Render deploy.
+- Protect production credentials and keep local/dev data flows repeatable.
 - Connect enquiries to the student-management workflow with one-click
   conversion.
 - Add exact partial-payment amounts, due dates, and outstanding balances before
