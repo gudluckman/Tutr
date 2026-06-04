@@ -3,6 +3,7 @@ import { FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { assetUrl } from '../../api/client';
 import { createEnquiry, getPublicTutor } from '../../api/tutorApi';
+import { Avatar } from '../../components/ui/Avatar';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { EnquiryPayload, PreferredMode } from '../../types/enquiry';
@@ -40,9 +41,11 @@ export function TutorProfilePage() {
         <section className="space-y-6 lg:col-span-2">
           <div className="rounded-lg border border-border bg-card p-6 sm:p-8">
             <div className="mb-6 flex flex-col gap-6 sm:flex-row sm:items-start">
-              <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-2xl font-semibold text-primary">
-                {imageUrl ? <img className="h-full w-full object-cover" src={imageUrl} alt={tutor.data.displayName} /> : initials(tutor.data.displayName)}
-              </div>
+              <Avatar
+                name={tutor.data.displayName}
+                src={imageUrl}
+                className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-2xl font-semibold"
+              />
               <div className="flex-1">
                 <h1 className="mb-2 text-2xl font-semibold text-foreground sm:text-3xl">{tutor.data.displayName}</h1>
                 <p className="mb-3 text-lg text-muted-foreground">{tutor.data.headline || 'Independent tutor on Tutr'}</p>
@@ -145,10 +148,6 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
       {children}
     </label>
   );
-}
-
-function initials(name: string) {
-  return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'T';
 }
 
 function rateLabel(tutor: TutorProfile) {

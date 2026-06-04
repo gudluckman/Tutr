@@ -1,19 +1,16 @@
 package com.tutr.api.common;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.time.Instant;
 
 @RestController
 @RequestMapping("/api/v1/health")
 public class HealthController {
     @GetMapping
-    HealthResponse health() {
-        return new HealthResponse("ok", Instant.now());
-    }
-
-    record HealthResponse(String status, Instant checkedAt) {
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void health() {
     }
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { assetUrl } from '../../api/client';
 import { getTutorProfile, updateTutorProfile, uploadTutorProfileImage } from '../../api/tutorApi';
+import { Avatar } from '../../components/ui/Avatar';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { TutorProfile } from '../../types/tutor';
@@ -54,9 +55,11 @@ export function ProfileSettingsPage() {
         <section className="rounded-lg border border-border bg-card p-4 sm:p-6">
           <h2 className="mb-4 text-lg font-semibold text-foreground">Profile image</h2>
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-2xl font-semibold text-primary">
-              {imageUrl ? <img className="h-full w-full object-cover" src={imageUrl} alt={form.displayName} /> : initials(form.displayName)}
-            </div>
+            <Avatar
+              name={form.displayName}
+              src={imageUrl}
+              className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-2xl font-semibold"
+            />
             <div>
               <label className="button-secondary cursor-pointer gap-2">
                 <Icon name="upload" className="h-4 w-4" />
@@ -141,8 +144,4 @@ function FormInput({ label, value, onChange, type = 'text', placeholder, require
       <input className="input" type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} required={required} />
     </label>
   );
-}
-
-function initials(name: string) {
-  return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'T';
 }

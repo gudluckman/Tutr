@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { searchTutors } from '../../api/tutorApi';
 import { assetUrl } from '../../api/client';
+import { Avatar } from '../../components/ui/Avatar';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import { Link } from 'react-router-dom';
@@ -71,9 +72,11 @@ function TutorResultCard({ tutor }: { tutor: TutorProfile }) {
   return (
     <article className="rounded-lg border border-border bg-card p-6 transition-shadow hover:shadow-lg">
       <div className="mb-4 flex items-start gap-4">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 font-semibold text-primary">
-          {imageUrl ? <img src={imageUrl} alt={tutor.displayName} className="h-full w-full object-cover" /> : initials(tutor.displayName)}
-        </div>
+        <Avatar
+          name={tutor.displayName}
+          src={imageUrl}
+          className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 font-semibold"
+        />
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-semibold text-foreground">{tutor.displayName}</h3>
           {tutor.location && (
@@ -101,10 +104,6 @@ function TutorResultCard({ tutor }: { tutor: TutorProfile }) {
       </div>
     </article>
   );
-}
-
-function initials(name: string) {
-  return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'T';
 }
 
 function rateLabel(tutor: TutorProfile) {
