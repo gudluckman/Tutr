@@ -8,7 +8,7 @@ import type { RevenuePeriod } from '../../types/analytics';
 
 const money = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
 const revenuePeriodStorageKey = 'tutr.overviewRevenuePeriod';
-const revenuePeriods: RevenuePeriod[] = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+const revenuePeriods: RevenuePeriod[] = ['WEEKLY', 'MONTHLY', 'YEARLY'];
 
 export function DashboardPage() {
   const [period, setPeriod] = useState<RevenuePeriod>(() => storedRevenuePeriod());

@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,6 +33,7 @@ import java.util.UUID;
 public class GoogleCalendarSyncService {
     private static final Logger log = LoggerFactory.getLogger(GoogleCalendarSyncService.class);
     private static final String CALENDAR_SCOPE = "openid email profile https://www.googleapis.com/auth/calendar.events";
+    private static final DateTimeFormatter GOOGLE_EXDATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
 
     private final GoogleCalendarConnectionRepository connections;
     private final LessonRepository lessons;
@@ -207,19 +209,73 @@ public class GoogleCalendarSyncService {
     }
 
     public void deleteLessonEvent(Lesson lesson) {
-        if (lesson.getGoogleEventId() == null || lesson.getGoogleEventId().isBlank()) {
+        deleteEvent(lesson.getTutor(), lesson.getGoogleEventId());
+    }
+
+    public void deleteSeriesEvent(LessonSeries series) {
+        deleteEvent(series.getTutor(), series.getGoogleEventId());
+    }
+
+    public void excludeSeriesOccurrence(Lesson lesson) {
+        LessonSeries series = lesson.getLessonSeries();
+        if (series == null || series.getGoogleEventId() == null || series.getGoogleEventId().isBlank()) {
             return;
         }
-        connectionFor(lesson.getTutor()).ifPresent(connection -> {
+        connectionFor(series.getTutor()).ifPresent(connection -> {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> event = restClient.get()
+                        .uri("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}", connection.getCalendarId(), series.getGoogleEventId())
+                        .header("Authorization", "Bearer " + accessToken(connection))
+                        .retrieve()
+                        .body(Map.class);
+                List<String> recurrence = recurrenceWithExdate(event, series.getRecurrenceRule(), lesson.getLessonDate());
+                restClient.patch()
+                        .uri("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}?sendUpdates=all", connection.getCalendarId(), series.getGoogleEventId())
+                        .header("Authorization", "Bearer " + accessToken(connection))
+                        .body(Map.of("recurrence", recurrence))
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (RuntimeException ex) {
+                log.warn("Failed to exclude recurring lesson occurrence {} from Google Calendar", lesson.getId(), ex);
+            }
+        });
+    }
+
+    private void deleteEvent(User tutor, String eventId) {
+        if (eventId == null || eventId.isBlank()) {
+            return;
+        }
+        connectionFor(tutor).ifPresent(connection -> {
             try {
                 restClient.delete()
-                        .uri("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}?sendUpdates=all", connection.getCalendarId(), lesson.getGoogleEventId())
+                        .uri("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}?sendUpdates=all", connection.getCalendarId(), eventId)
                         .header("Authorization", "Bearer " + accessToken(connection))
                         .retrieve()
                         .toBodilessEntity();
             } catch (RuntimeException ignored) {
             }
         });
+    }
+
+    private List<String> recurrenceWithExdate(Map<String, Object> event, String fallbackRule, Instant occurrence) {
+        List<String> recurrence = new ArrayList<>();
+        Object existing = event == null ? null : event.get("recurrence");
+        if (existing instanceof List<?> existingRecurrence) {
+            for (Object entry : existingRecurrence) {
+                if (entry != null) {
+                    recurrence.add(String.valueOf(entry));
+                }
+            }
+        }
+        if (recurrence.isEmpty() && fallbackRule != null && !fallbackRule.isBlank()) {
+            recurrence.add(fallbackRule);
+        }
+        String exdate = "EXDATE:" + GOOGLE_EXDATE_FORMATTER.format(occurrence);
+        if (!recurrence.contains(exdate)) {
+            recurrence.add(exdate);
+        }
+        return recurrence;
     }
 
     @Transactional

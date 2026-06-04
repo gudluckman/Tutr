@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getGoogleCalendarAuthUrl, getGoogleCalendarStatus, syncGoogleCalendarDeletions } from '../../api/calendarApi';
-import { createLesson, createRecurringLessons, deleteLesson, listLessons, updateLesson, updateLessonStatuses } from '../../api/lessonApi';
+import { createLesson, createRecurringLessons, deleteLesson, deleteLessonSeries, listLessons, updateLesson, updateLessonStatuses } from '../../api/lessonApi';
 import { listStudents } from '../../api/studentApi';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
@@ -12,6 +12,7 @@ import type { Student } from '../../types/student';
 type FormMode = 'single' | 'recurring';
 type CalendarView = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 type LessonsWorkspaceView = 'CALENDAR' | 'TABLE';
+type LessonDeleteScope = 'SINGLE' | 'SERIES';
 
 const lessonAmountNumber = new Intl.NumberFormat('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const googleCalendarColors = [
@@ -77,6 +78,7 @@ export function LessonsPage() {
   const [calendarView, setCalendarView] = useState<CalendarView>('WEEKLY');
   const [calendarDate, setCalendarDate] = useState(() => startOfDay(new Date()));
   const [editing, setEditing] = useState<Lesson | null>(null);
+  const [deletingLesson, setDeletingLesson] = useState<Lesson | null>(null);
   const [form, setForm] = useState<LessonPayload>(emptyLesson);
   const [recurringForm, setRecurringForm] = useState<RecurringLessonPayload>(emptyRecurring);
 
@@ -114,7 +116,17 @@ export function LessonsPage() {
     },
   });
 
-  const remove = useMutation({ mutationFn: deleteLesson, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lessons'] }) });
+  const remove = useMutation({
+    mutationFn: ({ lesson, scope }: { lesson: Lesson; scope: LessonDeleteScope }) => (
+      scope === 'SERIES' ? deleteLessonSeries(lesson.id) : deleteLesson(lesson.id)
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['earnings'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      setDeletingLesson(null);
+    },
+  });
 
   const updateStatuses = useMutation({
     mutationFn: ({ id, status, paymentStatus }: { id: string; status?: LessonStatus; paymentStatus?: PaymentStatus }) => updateLessonStatuses(id, { status, paymentStatus }),
@@ -187,9 +199,13 @@ export function LessonsPage() {
     setShowForm(false);
   }
 
-  function removeLesson(id: string) {
-    if (window.confirm('Delete this lesson and its Google Calendar event?')) {
-      remove.mutate(id);
+  function removeLesson(lesson: Lesson) {
+    setDeletingLesson(lesson);
+  }
+
+  function confirmRemoveLesson(scope: LessonDeleteScope) {
+    if (deletingLesson) {
+      remove.mutate({ lesson: deletingLesson, scope });
     }
   }
 
@@ -234,6 +250,16 @@ export function LessonsPage() {
       <ErrorAlert className="mb-6" error={syncDeletedGoogleEvents.error} fallback="Could not sync deleted Google Calendar events. Please try again." />
       <ErrorAlert className="mb-6" error={remove.error} fallback="Could not delete the lesson. Please try again." />
       <ErrorAlert className="mb-6" error={updateStatuses.error} fallback="Could not update the lesson status. Please try again." />
+
+      {deletingLesson && (
+        <DeleteLessonModal
+          lesson={deletingLesson}
+          isDeleting={remove.isPending}
+          onClose={() => setDeletingLesson(null)}
+          onDeleteSingle={() => confirmRemoveLesson('SINGLE')}
+          onDeleteSeries={() => confirmRemoveLesson('SERIES')}
+        />
+      )}
 
       {calendarError && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -323,7 +349,7 @@ function LessonCalendar({
   onViewChange: (view: CalendarView) => void;
   onDateChange: (date: Date) => void;
   onEdit: (lesson: Lesson) => void;
-  onDelete: (id: string) => void;
+  onDelete: (lesson: Lesson) => void;
   onUpdateStatus: (id: string, status: LessonStatus) => void;
   onUpdatePaymentStatus: (id: string, status: PaymentStatus) => void;
 }) {
@@ -406,7 +432,7 @@ function DailyCalendar({
   lessons: Lesson[];
   isUpdating: (lesson: Lesson) => boolean;
   onEdit: (lesson: Lesson) => void;
-  onDelete: (id: string) => void;
+  onDelete: (lesson: Lesson) => void;
   onUpdateStatus: (id: string, status: LessonStatus) => void;
   onUpdatePaymentStatus: (id: string, status: PaymentStatus) => void;
 }) {
@@ -424,7 +450,7 @@ function DailyCalendar({
             lesson={lesson}
             isUpdating={isUpdating(lesson)}
             onEdit={() => onEdit(lesson)}
-            onDelete={() => onDelete(lesson.id)}
+            onDelete={() => onDelete(lesson)}
             onUpdateStatus={(status) => onUpdateStatus(lesson.id, status)}
             onUpdatePaymentStatus={(paymentStatus) => onUpdatePaymentStatus(lesson.id, paymentStatus)}
           />
@@ -523,7 +549,7 @@ function WeeklyCalendar({
   students: Student[];
   isUpdating: (lesson: Lesson) => boolean;
   onEdit: (lesson: Lesson) => void;
-  onDelete: (id: string) => void;
+  onDelete: (lesson: Lesson) => void;
   onUpdateStatus: (id: string, status: LessonStatus) => void;
   onUpdatePaymentStatus: (id: string, status: PaymentStatus) => void;
 }) {
@@ -547,7 +573,7 @@ function WeeklyCalendar({
                     student={students.find((student) => student.id === lesson.studentId)}
                     isUpdating={isUpdating(lesson)}
                     onEdit={() => onEdit(lesson)}
-                    onDelete={() => onDelete(lesson.id)}
+                    onDelete={() => onDelete(lesson)}
                     onUpdateStatus={(status) => onUpdateStatus(lesson.id, status)}
                     onUpdatePaymentStatus={(paymentStatus) => onUpdatePaymentStatus(lesson.id, paymentStatus)}
                   />
@@ -574,7 +600,7 @@ function MonthlyCalendar({
   lessons: Lesson[];
   isUpdating: (lesson: Lesson) => boolean;
   onEdit: (lesson: Lesson) => void;
-  onDelete: (id: string) => void;
+  onDelete: (lesson: Lesson) => void;
   onUpdateStatus: (id: string, status: LessonStatus) => void;
   onUpdatePaymentStatus: (id: string, status: PaymentStatus) => void;
 }) {
@@ -620,7 +646,7 @@ function MonthlyCalendar({
           isUpdating={isUpdating(selectedLesson)}
           onClose={() => setSelectedLessonId(null)}
           onEdit={() => { setSelectedLessonId(null); onEdit(selectedLesson); }}
-          onDelete={() => { setSelectedLessonId(null); onDelete(selectedLesson.id); }}
+          onDelete={() => { setSelectedLessonId(null); onDelete(selectedLesson); }}
           onUpdateStatus={(status) => onUpdateStatus(selectedLesson.id, status)}
           onUpdatePaymentStatus={(paymentStatus) => onUpdatePaymentStatus(selectedLesson.id, paymentStatus)}
         />
@@ -697,6 +723,55 @@ function MonthlyLessonModal({
           <button className="button-secondary gap-2 text-destructive hover:bg-destructive/10" type="button" onClick={onDelete}><Icon name="trash" className="h-4 w-4" />Delete lesson</button>
           <button className="button-secondary" type="button" onClick={onClose}>Close</button>
           <button className="button gap-2" type="button" onClick={onEdit}><Icon name="edit" className="h-4 w-4" />Edit lesson</button>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function DeleteLessonModal({
+  lesson,
+  isDeleting,
+  onClose,
+  onDeleteSingle,
+  onDeleteSeries,
+}: {
+  lesson: Lesson;
+  isDeleting: boolean;
+  onClose: () => void;
+  onDeleteSingle: () => void;
+  onDeleteSeries: () => void;
+}) {
+  const isRecurring = Boolean(lesson.lessonSeriesId);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Delete lesson" onMouseDown={isDeleting ? undefined : onClose}>
+      <article className="w-full max-w-md rounded-t-xl border border-border bg-card p-4 shadow-xl sm:rounded-lg sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Delete lesson?</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{lesson.title || 'Tutoring lesson'} with {lesson.studentName}</p>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} disabled={isDeleting} aria-label="Close delete dialog">
+            <Icon name="x" className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          {isRecurring
+            ? 'This is part of a recurring lesson. Choose whether to delete only this event or every event in the series.'
+            : 'This will delete the lesson and its synced Google Calendar event.'}
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button className="button-secondary" type="button" onClick={onClose} disabled={isDeleting}>Cancel</button>
+          <button className="button-secondary gap-2 text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSingle} disabled={isDeleting}>
+            <Icon name="trash" className="h-4 w-4" />
+            Delete this event
+          </button>
+          {isRecurring && (
+            <button className="button gap-2 bg-destructive hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSeries} disabled={isDeleting}>
+              <Icon name="trash" className="h-4 w-4" />
+              Delete all events
+            </button>
+          )}
         </div>
       </article>
     </div>
@@ -1251,7 +1326,7 @@ function TextArea({ label, value, onChange }: { label: string; value: string; on
   );
 }
 
-function LessonTable({ lessons, onEdit, onDelete }: { lessons: Lesson[]; onEdit: (lesson: Lesson) => void; onDelete: (id: string) => void }) {
+function LessonTable({ lessons, onEdit, onDelete }: { lessons: Lesson[]; onEdit: (lesson: Lesson) => void; onDelete: (lesson: Lesson) => void }) {
   const pageSize = 5;
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<'created' | 'date-desc' | 'date-asc'>('created');
@@ -1373,7 +1448,7 @@ function LessonTable({ lessons, onEdit, onDelete }: { lessons: Lesson[]; onEdit:
                     <button className="icon-button" onClick={() => onEdit(lesson)} aria-label={`Edit ${lesson.title || lesson.studentName}`}>
                       <Icon name="edit" className="h-4 w-4" />
                     </button>
-                    <button className="icon-button hover:bg-destructive/10 hover:text-destructive" onClick={() => onDelete(lesson.id)} aria-label={`Delete ${lesson.title || lesson.studentName} and synced Google event`}>
+                    <button className="icon-button hover:bg-destructive/10 hover:text-destructive" onClick={() => onDelete(lesson)} aria-label={`Delete ${lesson.title || lesson.studentName} and synced Google event`}>
                       <Icon name="trash" className="h-4 w-4" />
                     </button>
                   </div>

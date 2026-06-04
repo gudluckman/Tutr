@@ -17,6 +17,8 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 
     List<Lesson> findByLessonSeriesOrderByLessonDateAsc(LessonSeries lessonSeries);
 
+    void deleteByLessonSeries(LessonSeries lessonSeries);
+
     @EntityGraph(attributePaths = "student")
     Optional<Lesson> findByIdAndTutor(UUID id, User tutor);
 }

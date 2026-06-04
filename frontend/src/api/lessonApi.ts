@@ -29,3 +29,7 @@ export async function updateLessonStatuses(id: string, payload: LessonStatusPayl
 export async function deleteLesson(id: string) {
   await api.delete(`/lessons/${id}`);
 }
+
+export async function deleteLessonSeries(id: string) {
+  await api.delete(`/lessons/${id}/series`);
+}

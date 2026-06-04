@@ -63,4 +63,10 @@ public class LessonController {
     void delete(@AuthenticationPrincipal User user, @PathVariable UUID id) {
         service.delete(user, id);
     }
+
+    @DeleteMapping("/{id}/series")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteSeries(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+        service.deleteSeries(user, id);
+    }
 }
