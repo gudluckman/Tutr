@@ -42,7 +42,7 @@ export function TutorSearchPage() {
             </label>
             <div className="flex items-end">
               <label className="flex cursor-pointer items-center gap-2">
-                <input type="checkbox" checked={filters.online} onChange={(event) => setFilters({ ...filters, online: event.target.checked })} className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring" />
+                <input type="checkbox" checked={filters.online} onChange={(event) => setFilters({ ...filters, online: event.target.checked })} className="h-4 w-4 rounded border-input text-neutral-700 focus:ring-2 focus:ring-neutral-200" />
                 <span className="text-sm text-foreground">Online lessons only</span>
               </label>
             </div>

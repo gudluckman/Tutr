@@ -167,7 +167,7 @@ export function EarningsPage() {
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
             <select
-              className="h-10 rounded-md border border-border bg-white px-3 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none"
+              className="h-10 rounded-md border border-border bg-white px-3 text-sm text-foreground shadow-sm focus:border-neutral-300 focus:outline-none"
               value={selectedYear}
               aria-label="Filter earnings by year"
               onChange={(event) => {
@@ -180,7 +180,7 @@ export function EarningsPage() {
               {data?.availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
             </select>
             <select
-              className="h-10 rounded-md border border-border bg-white px-3 text-sm text-foreground shadow-sm focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 rounded-md border border-border bg-white px-3 text-sm text-foreground shadow-sm focus:border-neutral-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               value={selectedMonth}
               aria-label="Filter earnings by month"
               disabled={!selectedYear}
@@ -348,7 +348,7 @@ export function EarningsPage() {
 
             <label className="mt-4 flex items-start gap-3 rounded-md border border-yellow-200 bg-yellow-50 p-3">
               <input
-                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                className="mt-1 h-4 w-4 rounded border-border text-neutral-700 focus:ring-neutral-200"
                 type="checkbox"
                 checked={replaceExistingImports}
                 onChange={(event) => setReplaceExistingImports(event.target.checked)}

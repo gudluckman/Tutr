@@ -3,6 +3,7 @@ import type { SVGProps } from 'react';
 const paths = {
   graduation: 'M22 10 12 5 2 10l10 5 10-5ZM6 12v4c2 2 10 2 12 0v-4M20 11v5',
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  chevronDown: 'm6 9 6 6 6-6',
   user: 'M20 21a8 8 0 0 0-16 0M12 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
   mail: 'M4 6h16v12H4zM4 7l8 6 8-6',
   users: 'M16 21a6 6 0 0 0-12 0M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21a5 5 0 0 0-5-5M17 11a3 3 0 1 0 0-6',

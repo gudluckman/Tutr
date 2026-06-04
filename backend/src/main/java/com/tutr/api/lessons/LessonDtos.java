@@ -25,6 +25,8 @@ public final class LessonDtos {
             String homework,
             String miroBoardUrl,
             String inviteEmail,
+            String googleColorId,
+            Integer googleExtraReminderMinutes,
             Boolean syncToGoogle
     ) {
     }
@@ -49,6 +51,8 @@ public final class LessonDtos {
             String homework,
             String miroBoardUrl,
             String inviteEmail,
+            String googleColorId,
+            Integer googleExtraReminderMinutes,
             Boolean syncToGoogle
     ) {
     }
@@ -68,6 +72,8 @@ public final class LessonDtos {
             String homework,
             String miroBoardUrl,
             String inviteEmail,
+            String googleColorId,
+            Integer googleExtraReminderMinutes,
             Boolean googleSyncEnabled,
             String googleMeetLink,
             GoogleSyncStatus googleSyncStatus,
@@ -90,6 +96,8 @@ public final class LessonDtos {
                     lesson.getHomework(),
                     lesson.getMiroBoardUrl(),
                     lesson.getInviteEmail(),
+                    lesson.getGoogleColorId(),
+                    lesson.getGoogleExtraReminderMinutes(),
                     lesson.isGoogleSyncEnabled(),
                     lesson.getGoogleMeetLink(),
                     lesson.getGoogleSyncStatus(),

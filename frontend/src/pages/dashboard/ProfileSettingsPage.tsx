@@ -99,11 +99,11 @@ export function ProfileSettingsPage() {
         <section className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6">
           <h2 className="text-lg font-semibold text-foreground">Settings</h2>
           <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" checked={form.online} onChange={(event) => setForm({ ...form, online: event.target.checked })} className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring" />
+            <input type="checkbox" checked={form.online} onChange={(event) => setForm({ ...form, online: event.target.checked })} className="h-4 w-4 rounded border-input text-neutral-700 focus:ring-2 focus:ring-neutral-200" />
             <span className="text-sm text-foreground">Offers online lessons</span>
           </label>
           <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" checked={form.isPublic} onChange={(event) => setForm({ ...form, isPublic: event.target.checked })} className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring" />
+            <input type="checkbox" checked={form.isPublic} onChange={(event) => setForm({ ...form, isPublic: event.target.checked })} className="h-4 w-4 rounded border-input text-neutral-700 focus:ring-2 focus:ring-neutral-200" />
             <span className="flex items-center gap-2 text-sm text-foreground">
               <Icon name="globe" className="h-4 w-4" />
               Make profile public and searchable

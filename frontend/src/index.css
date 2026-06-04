@@ -41,7 +41,20 @@ a {
 }
 
 .input {
-  @apply w-full rounded-lg border border-input bg-input-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring;
+  @apply w-full rounded-lg border border-input bg-input-background px-3 py-2 text-sm outline-none focus:border-neutral-300 focus:ring-2 focus:ring-neutral-200;
+}
+
+select.input {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' fill='none' stroke='%23737373' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1rem;
+}
+
+select.input:disabled {
+  cursor: not-allowed;
 }
 
 .button {

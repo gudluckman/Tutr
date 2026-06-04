@@ -130,7 +130,9 @@ public class GoogleCalendarSyncService {
                     lesson.getMiroBoardUrl(),
                     lesson.getLessonNotes(),
                     lesson.getHomework(),
-                    lesson.getInviteEmail()
+                    lesson.getInviteEmail(),
+                    lesson.getGoogleColorId(),
+                    lesson.getGoogleExtraReminderMinutes()
             );
             Map<String, Object> response;
             if (lesson.getGoogleEventId() == null || lesson.getGoogleEventId().isBlank()) {
@@ -181,7 +183,9 @@ public class GoogleCalendarSyncService {
                     series.getMiroBoardUrl(),
                     null,
                     null,
-                    series.getInviteEmail()
+                    series.getInviteEmail(),
+                    series.getGoogleColorId(),
+                    series.getGoogleExtraReminderMinutes()
             );
             event.put("recurrence", List.of(series.getRecurrenceRule()));
             Map<String, Object> response = restClient.post()
@@ -253,7 +257,7 @@ public class GoogleCalendarSyncService {
         }
     }
 
-    private Map<String, Object> eventBody(String summary, String start, String end, String studentName, String boardUrl, String lessonNotes, String homework, String attendeeEmail) {
+    private Map<String, Object> eventBody(String summary, String start, String end, String studentName, String boardUrl, String lessonNotes, String homework, String attendeeEmail, String colorId, Integer extraReminderMinutes) {
         Map<String, Object> event = new HashMap<>();
         event.put("summary", summary);
         event.put("description", eventDescription(studentName, boardUrl, lessonNotes, homework));
@@ -265,14 +269,23 @@ public class GoogleCalendarSyncService {
                         "conferenceSolutionKey", Map.of("type", "hangoutsMeet")
                 )
         ));
-        event.put("reminders", Map.of(
-                "useDefault", false,
-                "overrides", List.of(Map.of("method", "popup", "minutes", 60))
-        ));
+        event.put("reminders", Map.of("useDefault", false, "overrides", reminderOverrides(extraReminderMinutes)));
         if (attendeeEmail != null && !attendeeEmail.isBlank()) {
             event.put("attendees", List.of(Map.of("email", attendeeEmail)));
         }
+        if (colorId != null && !colorId.isBlank()) {
+            event.put("colorId", colorId);
+        }
         return event;
+    }
+
+    private List<Map<String, Object>> reminderOverrides(Integer extraReminderMinutes) {
+        List<Map<String, Object>> reminders = new java.util.ArrayList<>();
+        reminders.add(Map.of("method", "popup", "minutes", 60));
+        if (extraReminderMinutes != null && extraReminderMinutes != 60) {
+            reminders.add(Map.of("method", "popup", "minutes", extraReminderMinutes));
+        }
+        return reminders;
     }
 
     private String eventDescription(String studentName, String boardUrl, String lessonNotes, String homework) {

@@ -18,6 +18,8 @@ export type Lesson = {
   homework?: string;
   miroBoardUrl?: string;
   inviteEmail?: string;
+  googleColorId?: string | null;
+  googleExtraReminderMinutes?: number | null;
   googleSyncEnabled?: boolean;
   googleMeetLink?: string | null;
   googleSyncStatus?: GoogleSyncStatus;
@@ -47,5 +49,7 @@ export type RecurringLessonPayload = {
   homework?: string;
   miroBoardUrl?: string;
   inviteEmail?: string;
+  googleColorId?: string | null;
+  googleExtraReminderMinutes?: number | null;
   syncToGoogle?: boolean;
 };

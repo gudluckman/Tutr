@@ -14,6 +14,25 @@ type CalendarView = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 type LessonsWorkspaceView = 'CALENDAR' | 'TABLE';
 
 const lessonAmountNumber = new Intl.NumberFormat('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const googleCalendarColors = [
+  { id: '', label: 'Default', swatch: '#16a34a' },
+  { id: '1', label: 'Lavender', swatch: '#7986cb' },
+  { id: '2', label: 'Sage', swatch: '#33b679' },
+  { id: '3', label: 'Grape', swatch: '#8e24aa' },
+  { id: '4', label: 'Flamingo', swatch: '#e67c73' },
+  { id: '5', label: 'Banana', swatch: '#f6c026' },
+  { id: '6', label: 'Tangerine', swatch: '#f5511d' },
+  { id: '7', label: 'Peacock', swatch: '#039be5' },
+  { id: '8', label: 'Graphite', swatch: '#616161' },
+  { id: '9', label: 'Blueberry', swatch: '#3f51b5' },
+  { id: '10', label: 'Basil', swatch: '#0b8043' },
+  { id: '11', label: 'Tomato', swatch: '#d50000' },
+];
+const googleReminderOptions = [
+  { unit: 'minutes', multiplier: 1, min: 1, max: 59 },
+  { unit: 'hours', multiplier: 60, min: 1, max: 23 },
+  { unit: 'days', multiplier: 1440, min: 1, max: 28 },
+];
 
 const emptyLesson: LessonPayload = {
   studentId: '',
@@ -27,6 +46,8 @@ const emptyLesson: LessonPayload = {
   homework: '',
   miroBoardUrl: '',
   inviteEmail: '',
+  googleColorId: '',
+  googleExtraReminderMinutes: null,
   syncToGoogle: true,
 };
 
@@ -42,6 +63,8 @@ const emptyRecurring: RecurringLessonPayload = {
   homework: '',
   miroBoardUrl: '',
   inviteEmail: '',
+  googleColorId: '',
+  googleExtraReminderMinutes: null,
   syncToGoogle: true,
 };
 
@@ -148,6 +171,8 @@ export function LessonsPage() {
       homework: lesson.homework ?? '',
       miroBoardUrl: lesson.miroBoardUrl ?? '',
       inviteEmail: lesson.inviteEmail ?? '',
+      googleColorId: lesson.googleColorId ?? '',
+      googleExtraReminderMinutes: lesson.googleExtraReminderMinutes ?? null,
       syncToGoogle: Boolean(lesson.googleSyncEnabled),
       googleSyncEnabled: lesson.googleSyncEnabled,
     });
@@ -917,10 +942,21 @@ function SingleLessonFields({ form, setForm, students, googleConnected }: { form
       <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
       <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
       <SelectField label="Lesson status *" value={form.status} onChange={(value) => setForm({ ...form, status: value as LessonStatus })} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']} />
-      <SelectField label="Payment status *" value={form.paymentStatus} onChange={(value) => setForm({ ...form, paymentStatus: value as PaymentStatus })} options={['UNPAID', 'PAID', 'PARTIAL']} />
-      <FormInput label="Board link" type="url" value={form.miroBoardUrl ?? ''} onChange={(value) => setForm({ ...form, miroBoardUrl: value })} />
-      <FormInput label="Invite email" type="email" value={form.inviteEmail ?? ''} onChange={(value) => setForm({ ...form, inviteEmail: value })} />
-      <SyncToggle checked={Boolean(form.syncToGoogle)} disabled={!googleConnected} onChange={(syncToGoogle) => setForm({ ...form, syncToGoogle })} />
+      <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+        <SelectField label="Payment status *" value={form.paymentStatus} onChange={(value) => setForm({ ...form, paymentStatus: value as PaymentStatus })} options={['UNPAID', 'PAID', 'PARTIAL']} />
+        <GoogleNotifications value={form.googleExtraReminderMinutes ?? null} disabled={!googleConnected || !form.syncToGoogle} onChange={(googleExtraReminderMinutes) => setForm({ ...form, googleExtraReminderMinutes })} />
+      </div>
+      <CalendarSyncFields
+        boardLink={form.miroBoardUrl ?? ''}
+        inviteEmail={form.inviteEmail ?? ''}
+        googleColorId={form.googleColorId ?? ''}
+        syncToGoogle={Boolean(form.syncToGoogle)}
+        googleConnected={googleConnected}
+        onBoardLinkChange={(miroBoardUrl) => setForm({ ...form, miroBoardUrl })}
+        onInviteEmailChange={(inviteEmail) => setForm({ ...form, inviteEmail })}
+        onSyncChange={(syncToGoogle) => setForm({ ...form, syncToGoogle })}
+        onColorChange={(googleColorId) => setForm({ ...form, googleColorId })}
+      />
       <TextArea label="Lesson notes" value={form.lessonNotes ?? ''} onChange={(value) => setForm({ ...form, lessonNotes: value })} />
       <TextArea label="Homework" value={form.homework ?? ''} onChange={(value) => setForm({ ...form, homework: value })} />
     </>
@@ -942,10 +978,21 @@ function RecurringFields({ form, setForm, students, googleConnected }: { form: R
       <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
       <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
       <FormInput label="Repeat every weeks" type="number" value={String(form.intervalCount ?? '')} onChange={(value) => setForm({ ...form, intervalCount: value ? Number(value) : undefined })} />
-      <FormInput label="Repeat until" type="datetime-local" value={form.recurrenceUntil ?? ''} onChange={(value) => setForm({ ...form, recurrenceUntil: value || undefined })} />
-      <FormInput label="Board link" type="url" value={form.miroBoardUrl ?? ''} onChange={(value) => setForm({ ...form, miroBoardUrl: value })} />
-      <FormInput label="Invite email" type="email" value={form.inviteEmail ?? ''} onChange={(value) => setForm({ ...form, inviteEmail: value })} />
-      <SyncToggle checked={Boolean(form.syncToGoogle)} disabled={!googleConnected} onChange={(syncToGoogle) => setForm({ ...form, syncToGoogle })} />
+      <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+        <FormInput label="Repeat until" type="datetime-local" value={form.recurrenceUntil ?? ''} onChange={(value) => setForm({ ...form, recurrenceUntil: value || undefined })} />
+        <GoogleNotifications value={form.googleExtraReminderMinutes ?? null} disabled={!googleConnected || !form.syncToGoogle} onChange={(googleExtraReminderMinutes) => setForm({ ...form, googleExtraReminderMinutes })} />
+      </div>
+      <CalendarSyncFields
+        boardLink={form.miroBoardUrl ?? ''}
+        inviteEmail={form.inviteEmail ?? ''}
+        googleColorId={form.googleColorId ?? ''}
+        syncToGoogle={Boolean(form.syncToGoogle)}
+        googleConnected={googleConnected}
+        onBoardLinkChange={(miroBoardUrl) => setForm({ ...form, miroBoardUrl })}
+        onInviteEmailChange={(inviteEmail) => setForm({ ...form, inviteEmail })}
+        onSyncChange={(syncToGoogle) => setForm({ ...form, syncToGoogle })}
+        onColorChange={(googleColorId) => setForm({ ...form, googleColorId })}
+      />
       <TextArea label="Lesson notes" value={form.lessonNotes ?? ''} onChange={(value) => setForm({ ...form, lessonNotes: value })} />
       <TextArea label="Homework" value={form.homework ?? ''} onChange={(value) => setForm({ ...form, homework: value })} />
     </>
@@ -998,11 +1045,201 @@ function SelectField({ label, value, onChange, options }: { label: string; value
 
 function SyncToggle({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
   return (
-    <label className={`flex items-center gap-2 pt-7 text-sm ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring disabled:opacity-50" />
+    <label className={`flex min-h-10 items-center gap-2 text-sm ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 rounded border-input text-neutral-700 focus:ring-2 focus:ring-neutral-200 disabled:opacity-50" />
       Add to Google Calendar
     </label>
   );
+}
+
+function CalendarSyncFields({
+  boardLink,
+  inviteEmail,
+  googleColorId,
+  syncToGoogle,
+  googleConnected,
+  onBoardLinkChange,
+  onInviteEmailChange,
+  onSyncChange,
+  onColorChange,
+}: {
+  boardLink: string;
+  inviteEmail: string;
+  googleColorId: string;
+  syncToGoogle: boolean;
+  googleConnected: boolean;
+  onBoardLinkChange: (value: string) => void;
+  onInviteEmailChange: (value: string) => void;
+  onSyncChange: (value: boolean) => void;
+  onColorChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
+      <FormInput label="Board link" type="url" value={boardLink} onChange={onBoardLinkChange} />
+      <FormInput label="Invite email" type="email" value={inviteEmail} onChange={onInviteEmailChange} />
+      <div className="md:max-w-[240px]">
+        <GoogleColorSelect value={googleColorId} disabled={!googleConnected || !syncToGoogle} onChange={onColorChange} />
+      </div>
+      <div className="flex items-end">
+        <SyncToggle checked={syncToGoogle} disabled={!googleConnected} onChange={onSyncChange} />
+      </div>
+    </div>
+  );
+}
+
+function GoogleColorSelect({ value, disabled, onChange }: { value: string; disabled: boolean; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selected = googleCalendarColors.find((color) => color.id === value) ?? googleCalendarColors[0];
+  return (
+    <div className={`relative ${disabled ? 'opacity-60' : ''}`}>
+      <span className="mb-1.5 block text-sm font-medium text-foreground">Google event color</span>
+      <button
+        type="button"
+        className="input flex h-10 items-center justify-between gap-2 text-left disabled:cursor-not-allowed"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="h-4 w-4 shrink-0 rounded-full border border-border" style={{ backgroundColor: selected.swatch }} aria-hidden="true" />
+          <span className="truncate">{selected.label}</span>
+        </span>
+        <Icon name="arrowRight" className={`h-4 w-4 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open && !disabled && (
+        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg" role="listbox">
+          {googleCalendarColors.map((color) => (
+            <button
+              key={color.id || 'default'}
+              type="button"
+              className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted ${color.id === value ? 'bg-muted text-foreground' : 'text-foreground'}`}
+              role="option"
+              aria-selected={color.id === value}
+              onClick={() => {
+                onChange(color.id);
+                setOpen(false);
+              }}
+            >
+              <span className="h-4 w-4 shrink-0 rounded-full border border-border" style={{ backgroundColor: color.swatch }} aria-hidden="true" />
+              <span>{color.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GoogleNotifications({ value, disabled, onChange }: { value: number | null; disabled: boolean; onChange: (value: number | null) => void }) {
+  const extra = value == null ? null : reminderOption(value);
+  const [expanded, setExpanded] = useState(Boolean(extra));
+
+  useEffect(() => {
+    if (extra) {
+      setExpanded(true);
+    }
+  }, [extra?.minutes]);
+
+  return (
+    <div className={`block ${disabled ? 'opacity-60' : ''}`}>
+      <span className="mb-1.5 block text-sm font-medium text-foreground">Notifications</span>
+      <div className="rounded-md border border-border bg-card p-2">
+        <button
+          type="button"
+          className="flex min-h-9 w-full items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          disabled={disabled}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Icon name="alert" className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0">
+              <span className="block truncate">1 hour before</span>
+              {extra && !expanded && <span className="block truncate text-xs text-muted-foreground">Also {reminderLabel(extra.minutes)}</span>}
+            </span>
+          </span>
+          <Icon name="chevronDown" className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+        {expanded && extra ? (
+          <div className="mt-2">
+            <GoogleNotificationRow minutes={extra.minutes} disabled={disabled} onChange={onChange} onRemove={() => onChange(null)} />
+          </div>
+        ) : expanded ? (
+          <button type="button" className="mt-2 inline-flex h-9 items-center gap-2 rounded-md px-2 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60" disabled={disabled} onClick={() => onChange(10)}>
+            <Icon name="plus" className="h-4 w-4" />
+            Add notification
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function GoogleNotificationRow({ minutes, disabled = false, onChange, onRemove }: { minutes: number; disabled?: boolean; onChange?: (value: number) => void; onRemove?: () => void }) {
+  const selected = reminderOption(minutes);
+  const unitOptions = googleReminderOptions.map((option) => option.unit);
+  const selectedUnit = googleReminderOptions.find((option) => option.unit === selected.unit) ?? googleReminderOptions[0];
+  return (
+    <div className="grid gap-2 sm:grid-cols-[90px_minmax(110px,1fr)_36px]">
+      <input
+        className="input h-10"
+        type="number"
+        min={selectedUnit.min}
+        max={selectedUnit.max}
+        value={selected.amount}
+        disabled={disabled}
+        onChange={(event) => {
+          const amount = clampReminderAmount(Number(event.target.value), selectedUnit);
+          onChange?.(amount * selectedUnit.multiplier);
+        }}
+      />
+      <select
+        className="input h-10"
+        value={selected.unit}
+        disabled={disabled}
+        onChange={(event) => {
+          const next = googleReminderOptions.find((option) => option.unit === event.target.value);
+          if (next) onChange?.(clampReminderAmount(selected.amount, next) * next.multiplier);
+        }}
+      >
+        {unitOptions.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+      </select>
+      <button
+        type="button"
+        className="icon-button h-10 w-10 disabled:cursor-not-allowed disabled:opacity-30"
+        disabled={disabled}
+        onClick={onRemove}
+        aria-label="Remove notification"
+        title="Remove notification"
+      >
+        <Icon name="x" className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+function reminderOption(minutes: number) {
+  const exactUnit = googleReminderOptions.find((option) => minutes % option.multiplier === 0 && minutes / option.multiplier >= option.min && minutes / option.multiplier <= option.max);
+  const unit = exactUnit ?? googleReminderOptions[0];
+  return {
+    amount: clampReminderAmount(Math.round(minutes / unit.multiplier), unit),
+    unit: unit.unit,
+    minutes: clampReminderAmount(Math.round(minutes / unit.multiplier), unit) * unit.multiplier,
+  };
+}
+
+function reminderLabel(minutes: number) {
+  const option = reminderOption(minutes);
+  const unit = option.amount === 1 ? option.unit.replace(/s$/, '') : option.unit;
+  return `${option.amount} ${unit} before`;
+}
+
+function clampReminderAmount(amount: number, unit: { min: number; max: number }) {
+  if (!Number.isFinite(amount)) {
+    return unit.min;
+  }
+  return Math.max(unit.min, Math.min(unit.max, Math.round(amount)));
 }
 
 function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {

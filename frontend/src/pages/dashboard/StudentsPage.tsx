@@ -68,7 +68,7 @@ export function StudentsPage() {
             <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate ?? 0)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
             <div className="flex items-center pt-7">
               <label className="flex cursor-pointer items-center gap-2">
-                <input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring" />
+                <input type="checkbox" checked={form.active} onChange={(event) => setForm({ ...form, active: event.target.checked })} className="h-4 w-4 rounded border-input text-neutral-700 focus:ring-2 focus:ring-neutral-200" />
                 <span className="text-sm text-foreground">Active student</span>
               </label>
             </div>

@@ -19,6 +19,9 @@ import static com.tutr.api.lessons.LessonDtos.*;
 @Service
 @RequiredArgsConstructor
 public class LessonService {
+    private static final List<String> GOOGLE_COLOR_IDS = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
+    private static final int MAX_GOOGLE_EXTRA_REMINDER_MINUTES = 28 * 24 * 60;
+
     private final LessonRepository lessons;
     private final LessonSeriesRepository lessonSeries;
     private final StudentService students;
@@ -82,6 +85,8 @@ public class LessonService {
         series.setRecurrenceUntil(request.recurrenceUntil());
         series.setMiroBoardUrl(request.miroBoardUrl());
         series.setInviteEmail(inviteEmail(request.inviteEmail(), series.getStudent().getParentEmail()));
+        series.setGoogleColorId(googleColorId(request.googleColorId()));
+        series.setGoogleExtraReminderMinutes(googleExtraReminderMinutes(request.googleExtraReminderMinutes()));
         series.setGoogleSyncEnabled(Boolean.TRUE.equals(request.syncToGoogle()));
         series.setRecurrenceRule(googleCalendar.rrule(series));
         lessonSeries.save(series);
@@ -102,6 +107,8 @@ public class LessonService {
             lesson.setHomework(request.homework());
             lesson.setMiroBoardUrl(request.miroBoardUrl());
             lesson.setInviteEmail(series.getInviteEmail());
+            lesson.setGoogleColorId(series.getGoogleColorId());
+            lesson.setGoogleExtraReminderMinutes(series.getGoogleExtraReminderMinutes());
             lesson.setGoogleSyncEnabled(false);
             created.add(lesson);
         }
@@ -133,7 +140,30 @@ public class LessonService {
         lesson.setHomework(request.homework());
         lesson.setMiroBoardUrl(request.miroBoardUrl());
         lesson.setInviteEmail(inviteEmail(request.inviteEmail(), lesson.getStudent().getParentEmail()));
+        lesson.setGoogleColorId(googleColorId(request.googleColorId()));
+        lesson.setGoogleExtraReminderMinutes(googleExtraReminderMinutes(request.googleExtraReminderMinutes()));
         lesson.setGoogleSyncEnabled(Boolean.TRUE.equals(request.syncToGoogle()));
+    }
+
+    private String googleColorId(String requestedColorId) {
+        if (requestedColorId == null || requestedColorId.isBlank()) {
+            return null;
+        }
+        String colorId = requestedColorId.trim();
+        if (!GOOGLE_COLOR_IDS.contains(colorId)) {
+            throw new IllegalArgumentException("Choose a valid Google Calendar color.");
+        }
+        return colorId;
+    }
+
+    private Integer googleExtraReminderMinutes(Integer requestedReminderMinutes) {
+        if (requestedReminderMinutes == null) {
+            return null;
+        }
+        if (requestedReminderMinutes < 1 || requestedReminderMinutes > MAX_GOOGLE_EXTRA_REMINDER_MINUTES) {
+            throw new IllegalArgumentException("Choose a valid Google Calendar extra reminder.");
+        }
+        return requestedReminderMinutes;
     }
 
     private String inviteEmail(String requestedEmail, String studentEmail) {
@@ -166,6 +196,8 @@ public class LessonService {
             String homework,
             String miroBoardUrl,
             String inviteEmail,
+            String googleColorId,
+            Integer googleExtraReminderMinutes,
             boolean googleSyncEnabled
     ) {
         static CalendarDetails from(Lesson lesson) {
@@ -178,6 +210,8 @@ public class LessonService {
                     lesson.getHomework(),
                     lesson.getMiroBoardUrl(),
                     lesson.getInviteEmail(),
+                    lesson.getGoogleColorId(),
+                    lesson.getGoogleExtraReminderMinutes(),
                     lesson.isGoogleSyncEnabled()
             );
         }

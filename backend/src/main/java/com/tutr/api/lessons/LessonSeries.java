@@ -59,6 +59,8 @@ public class LessonSeries extends BaseEntity {
     private String googleEventId;
     private String googleCalendarId;
     private String googleMeetLink;
+    private String googleColorId;
+    private Integer googleExtraReminderMinutes;
     private boolean googleSyncEnabled;
 
     @Enumerated(EnumType.STRING)
