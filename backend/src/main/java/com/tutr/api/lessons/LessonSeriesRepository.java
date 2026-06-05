@@ -10,5 +10,7 @@ import java.util.UUID;
 public interface LessonSeriesRepository extends JpaRepository<LessonSeries, UUID> {
     List<LessonSeries> findByTutorOrderByFirstLessonDateDesc(User tutor);
 
+    List<LessonSeries> findByTutorAndGoogleEventIdIsNotNull(User tutor);
+
     Optional<LessonSeries> findByIdAndTutor(UUID id, User tutor);
 }

@@ -4,6 +4,7 @@ import com.tutr.api.lessons.GoogleSyncStatus;
 import com.tutr.api.lessons.Lesson;
 import com.tutr.api.lessons.LessonRepository;
 import com.tutr.api.lessons.LessonSeries;
+import com.tutr.api.lessons.LessonSeriesRepository;
 import com.tutr.api.users.User;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -15,17 +16,21 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -37,6 +42,7 @@ public class GoogleCalendarSyncService {
 
     private final GoogleCalendarConnectionRepository connections;
     private final LessonRepository lessons;
+    private final LessonSeriesRepository lessonSeries;
     private final RestClient restClient = RestClient.create();
 
     @Value("${app.google-calendar.client-id:}")
@@ -293,6 +299,27 @@ public class GoogleCalendarSyncService {
             lessons.delete(lesson);
             deleted++;
         }
+        for (LessonSeries series : lessonSeries.findByTutorAndGoogleEventIdIsNotNull(tutor)) {
+            if (!googleEventExists(connection.get(), series.getGoogleEventId())) {
+                List<Lesson> seriesLessons = lessons.findByLessonSeriesOrderByLessonDateAsc(series);
+                deleted += seriesLessons.size();
+                lessons.deleteByLessonSeries(series);
+                lessonSeries.delete(series);
+                continue;
+            }
+
+            Set<Instant> deletedStarts = deletedSeriesOccurrenceStarts(connection.get(), series.getGoogleEventId());
+            if (deletedStarts.isEmpty()) {
+                continue;
+            }
+            for (Lesson lesson : lessons.findByLessonSeriesOrderByLessonDateAsc(series)) {
+                if (!deletedStarts.contains(lesson.getLessonDate())) {
+                    continue;
+                }
+                lessons.delete(lesson);
+                deleted++;
+            }
+        }
         return deleted;
     }
 
@@ -311,6 +338,54 @@ public class GoogleCalendarSyncService {
             log.warn("Could not verify Google Calendar event {}", eventId, ex);
             return true;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Set<Instant> deletedSeriesOccurrenceStarts(GoogleCalendarConnection connection, String eventId) {
+        Set<Instant> deletedStarts = new HashSet<>();
+        String pageToken = null;
+        do {
+            try {
+                UriComponentsBuilder uri = UriComponentsBuilder
+                        .fromUriString("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}/instances")
+                        .queryParam("showDeleted", true)
+                        .queryParam("maxResults", 2500);
+                if (pageToken != null && !pageToken.isBlank()) {
+                    uri.queryParam("pageToken", pageToken);
+                }
+                Map<String, Object> response = restClient.get()
+                        .uri(uri.build(connection.getCalendarId(), eventId))
+                        .header("Authorization", "Bearer " + accessToken(connection))
+                        .retrieve()
+                        .body(Map.class);
+                Object items = response == null ? null : response.get("items");
+                if (items instanceof List<?> events) {
+                    for (Object item : events) {
+                        if (item instanceof Map<?, ?> event && "cancelled".equals(event.get("status"))) {
+                            googleStartTime(event.get("originalStartTime")).ifPresent(deletedStarts::add);
+                        }
+                    }
+                }
+                pageToken = response == null || response.get("nextPageToken") == null
+                        ? null
+                        : String.valueOf(response.get("nextPageToken"));
+            } catch (RuntimeException ex) {
+                log.warn("Could not verify deleted Google Calendar occurrences for series {}", eventId, ex);
+                return Set.of();
+            }
+        } while (pageToken != null);
+        return deletedStarts;
+    }
+
+    private Optional<Instant> googleStartTime(Object value) {
+        if (!(value instanceof Map<?, ?> start)) {
+            return Optional.empty();
+        }
+        Object dateTime = start.get("dateTime");
+        if (dateTime == null) {
+            return Optional.empty();
+        }
+        return Optional.of(OffsetDateTime.parse(String.valueOf(dateTime)).toInstant());
     }
 
     private Map<String, Object> eventBody(String summary, String start, String end, String studentName, String boardUrl, String lessonNotes, String homework, String attendeeEmail, String colorId, Integer extraReminderMinutes) {

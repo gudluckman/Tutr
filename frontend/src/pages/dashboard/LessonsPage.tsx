@@ -757,21 +757,35 @@ function DeleteLessonModal({
         </div>
         <p className="mt-4 text-sm text-muted-foreground">
           {isRecurring
-            ? 'This is part of a recurring lesson. Choose whether to delete only this event or every event in the series.'
-            : 'This will delete the lesson and its synced Google Calendar event.'}
+            ? 'This lesson repeats. What should be removed?'
+            : 'This lesson and its synced Google Calendar event will be removed.'}
         </p>
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button className="button-secondary" type="button" onClick={onClose} disabled={isDeleting}>Cancel</button>
-          <button className="button-secondary gap-2 text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSingle} disabled={isDeleting}>
-            <Icon name="trash" className="h-4 w-4" />
-            Delete this event
-          </button>
+        <div className={isRecurring ? 'mt-5 grid gap-2' : 'mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'}>
           {isRecurring && (
-            <button className="button gap-2 bg-destructive hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSeries} disabled={isDeleting}>
-              <Icon name="trash" className="h-4 w-4" />
-              Delete all events
+            <button className="button-secondary justify-start gap-3 bg-card px-3 py-3 text-left text-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSingle} disabled={isDeleting}>
+              <Icon name="trash" className="h-4 w-4 shrink-0 text-destructive" />
+              <span>
+                <span className="block text-sm font-semibold">Delete this event</span>
+                <span className="block text-xs font-normal text-muted-foreground">Keep the rest of the series.</span>
+              </span>
             </button>
           )}
+          {isRecurring && (
+            <button className="button justify-start gap-3 bg-destructive px-3 py-3 text-left hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSeries} disabled={isDeleting}>
+              <Icon name="trash" className="h-4 w-4 shrink-0" />
+              <span>
+                <span className="block text-sm font-semibold">Delete entire series</span>
+                <span className="block text-xs font-normal text-destructive-foreground/80">Remove every repeated lesson.</span>
+              </span>
+            </button>
+          )}
+          {!isRecurring && (
+            <button className="button gap-2 bg-destructive hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSingle} disabled={isDeleting}>
+              <Icon name="trash" className="h-4 w-4" />
+              Delete lesson
+            </button>
+          )}
+          <button className={isRecurring ? 'button-secondary mt-1' : 'button-secondary'} type="button" onClick={onClose} disabled={isDeleting}>Cancel</button>
         </div>
       </article>
     </div>
