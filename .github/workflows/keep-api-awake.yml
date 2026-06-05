@@ -14,8 +14,13 @@ jobs:
       - name: Ping API health endpoint
         run: |
           if [ -z "$HEALTH_URL" ]; then
-            echo "Set TUTR_API_HEALTH_URL as a GitHub Actions variable or secret."
-            exit 1
+            echo "::notice::Set TUTR_API_HEALTH_URL as a GitHub Actions variable or secret to enable keep-awake pings."
+            exit 0
           fi
 
-          curl --fail --silent --show-error --max-time 30 --retry 2 "$HEALTH_URL"
+          curl --fail --silent --show-error \
+            --max-time 60 \
+            --retry 5 \
+            --retry-delay 15 \
+            --retry-all-errors \
+            "$HEALTH_URL"
