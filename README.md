@@ -148,6 +148,10 @@ For a dev deployment:
 4. Set frontend `VITE_API_BASE_URL` to the deployed backend URL plus `/api/v1`.
 5. After both services deploy, visit `https://<api-host>/api/v1/health` and then open the frontend URL.
 
+To reduce Render free-tier cold starts, set a GitHub Actions repository variable or secret named
+`TUTR_API_HEALTH_URL` to `https://<api-host>/api/v1/health`. The
+`.github/workflows/keep-api-awake.yml` workflow pings that URL every 5 minutes.
+
 ## MVP Features
 
 - Tutor registration and login with JWT authentication

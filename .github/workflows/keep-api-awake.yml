@@ -1,0 +1,21 @@
+name: Keep API Awake
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    env:
+      HEALTH_URL: ${{ vars.TUTR_API_HEALTH_URL || secrets.TUTR_API_HEALTH_URL }}
+    steps:
+      - name: Ping API health endpoint
+        run: |
+          if [ -z "$HEALTH_URL" ]; then
+            echo "Set TUTR_API_HEALTH_URL as a GitHub Actions variable or secret."
+            exit 1
+          fi
+
+          curl --fail --silent --show-error --max-time 30 --retry 2 "$HEALTH_URL"
