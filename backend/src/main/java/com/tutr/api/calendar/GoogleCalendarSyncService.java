@@ -222,6 +222,28 @@ public class GoogleCalendarSyncService {
         deleteEvent(series.getTutor(), series.getGoogleEventId());
     }
 
+    public void endSeriesBefore(Lesson lesson) {
+        LessonSeries series = lesson.getLessonSeries();
+        if (series == null || series.getGoogleEventId() == null || series.getGoogleEventId().isBlank()) {
+            return;
+        }
+        series.setOccurrenceCount(null);
+        series.setRecurrenceUntil(lesson.getLessonDate().minusSeconds(1));
+        series.setRecurrenceRule(rrule(series));
+        connectionFor(series.getTutor()).ifPresent(connection -> {
+            try {
+                restClient.patch()
+                        .uri("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}?sendUpdates=all", connection.getCalendarId(), series.getGoogleEventId())
+                        .header("Authorization", "Bearer " + accessToken(connection))
+                        .body(Map.of("recurrence", List.of(series.getRecurrenceRule())))
+                        .retrieve()
+                        .toBodilessEntity();
+            } catch (RuntimeException ex) {
+                log.warn("Failed to end recurring lesson series {} in Google Calendar", series.getId(), ex);
+            }
+        });
+    }
+
     public void excludeSeriesOccurrence(Lesson lesson) {
         LessonSeries series = lesson.getLessonSeries();
         if (series == null || series.getGoogleEventId() == null || series.getGoogleEventId().isBlank()) {

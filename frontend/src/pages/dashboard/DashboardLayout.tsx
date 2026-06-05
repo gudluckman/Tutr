@@ -1,6 +1,14 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { getGoogleCalendarStatus } from '../../api/calendarApi';
+import { getAnalyticsSummary, getEarnings } from '../../api/analyticsApi';
 import { logout } from '../../api/authApi';
+import { listEnquiries } from '../../api/enquiryApi';
+import { listLessons } from '../../api/lessonApi';
+import { listStudents } from '../../api/studentApi';
+import { getTutorProfile } from '../../api/tutorApi';
 import { Icon, type IconName } from '../../components/ui/Icon';
+import type { RevenuePeriod } from '../../types/analytics';
 
 const navItems: Array<[string, string, IconName]> = [
   ['/dashboard', 'Overview', 'dashboard'],
@@ -13,6 +21,35 @@ const navItems: Array<[string, string, IconName]> = [
 
 export function DashboardLayout() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const prefetchDashboardRoute = (to: string) => {
+    switch (to) {
+      case '/dashboard': {
+        const period = storedRevenuePeriod();
+        queryClient.prefetchQuery({ queryKey: ['analytics', period], queryFn: () => getAnalyticsSummary(period) });
+        break;
+      }
+      case '/dashboard/students':
+        queryClient.prefetchQuery({ queryKey: ['students'], queryFn: listStudents });
+        break;
+      case '/dashboard/lessons':
+        queryClient.prefetchQuery({ queryKey: ['lessons'], queryFn: listLessons });
+        queryClient.prefetchQuery({ queryKey: ['students'], queryFn: listStudents });
+        queryClient.prefetchQuery({ queryKey: ['google-calendar-status'], queryFn: getGoogleCalendarStatus });
+        break;
+      case '/dashboard/earnings':
+        queryClient.prefetchQuery({ queryKey: ['earnings', 0, '', ''], queryFn: () => getEarnings(0) });
+        break;
+      case '/dashboard/enquiries':
+        queryClient.prefetchQuery({ queryKey: ['enquiries'], queryFn: listEnquiries });
+        break;
+      case '/dashboard/profile':
+        queryClient.prefetchQuery({ queryKey: ['profile'], queryFn: getTutorProfile });
+        break;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background md:flex">
       <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-sidebar-border bg-sidebar md:static md:flex md:min-h-screen md:w-64 md:flex-col md:border-r md:border-t-0">
@@ -26,6 +63,8 @@ export function DashboardLayout() {
               key={to}
               to={to}
               end={to === '/dashboard'}
+              onMouseEnter={() => prefetchDashboardRoute(to)}
+              onFocus={() => prefetchDashboardRoute(to)}
               className={({ isActive }) => `flex min-w-16 flex-col items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-[11px] transition-colors md:min-w-0 md:flex-row md:gap-3 md:px-3 md:py-2 md:text-sm ${
                 isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
               }`}
@@ -54,4 +93,10 @@ export function DashboardLayout() {
       </main>
     </div>
   );
+}
+
+function storedRevenuePeriod(): RevenuePeriod {
+  const revenuePeriods: RevenuePeriod[] = ['WEEKLY', 'MONTHLY', 'YEARLY'];
+  const stored = localStorage.getItem('tutr.overviewRevenuePeriod') as RevenuePeriod | null;
+  return stored && revenuePeriods.includes(stored) ? stored : 'WEEKLY';
 }

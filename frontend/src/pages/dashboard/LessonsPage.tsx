@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getGoogleCalendarAuthUrl, getGoogleCalendarStatus, syncGoogleCalendarDeletions } from '../../api/calendarApi';
-import { createLesson, createRecurringLessons, deleteLesson, deleteLessonSeries, listLessons, updateLesson, updateLessonStatuses } from '../../api/lessonApi';
+import { createLesson, createRecurringLessons, deleteFollowingLessons, deleteLesson, deleteLessonSeries, listLessons, updateLesson, updateLessonStatuses } from '../../api/lessonApi';
 import { listStudents } from '../../api/studentApi';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
@@ -12,8 +12,9 @@ import type { Student } from '../../types/student';
 type FormMode = 'single' | 'recurring';
 type CalendarView = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 type LessonsWorkspaceView = 'CALENDAR' | 'TABLE';
-type LessonDeleteScope = 'SINGLE' | 'SERIES';
+type LessonDeleteScope = 'SINGLE' | 'FOLLOWING' | 'SERIES';
 
+const googleDeletionSyncStorageKey = 'tutr.googleDeletionSyncAt';
 const lessonAmountNumber = new Intl.NumberFormat('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const googleCalendarColors = [
   { id: '', label: 'Default', swatch: '#16a34a' },
@@ -118,7 +119,7 @@ export function LessonsPage() {
 
   const remove = useMutation({
     mutationFn: ({ lesson, scope }: { lesson: Lesson; scope: LessonDeleteScope }) => (
-      scope === 'SERIES' ? deleteLessonSeries(lesson.id) : deleteLesson(lesson.id)
+      scope === 'SERIES' ? deleteLessonSeries(lesson.id) : scope === 'FOLLOWING' ? deleteFollowingLessons(lesson.id) : deleteLesson(lesson.id)
     ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lessons'] });
@@ -147,6 +148,7 @@ export function LessonsPage() {
   const syncDeletedGoogleEvents = useMutation({
     mutationFn: syncGoogleCalendarDeletions,
     onSuccess: (data) => {
+      sessionStorage.setItem(googleDeletionSyncStorageKey, String(Date.now()));
       if (data.deletedLessons > 0) {
         queryClient.invalidateQueries({ queryKey: ['lessons'] });
       }
@@ -154,7 +156,11 @@ export function LessonsPage() {
   });
 
   useEffect(() => {
-    if (googleStatus.data?.connected) {
+    if (!googleStatus.data?.connected) {
+      return;
+    }
+    const lastSyncAt = Number(sessionStorage.getItem(googleDeletionSyncStorageKey) ?? 0);
+    if (Date.now() - lastSyncAt > 5 * 60_000) {
       syncDeletedGoogleEvents.mutate();
     }
   }, [googleStatus.data?.connected]);
@@ -256,8 +262,7 @@ export function LessonsPage() {
           lesson={deletingLesson}
           isDeleting={remove.isPending}
           onClose={() => setDeletingLesson(null)}
-          onDeleteSingle={() => confirmRemoveLesson('SINGLE')}
-          onDeleteSeries={() => confirmRemoveLesson('SERIES')}
+          onConfirm={confirmRemoveLesson}
         />
       )}
 
@@ -733,16 +738,23 @@ function DeleteLessonModal({
   lesson,
   isDeleting,
   onClose,
-  onDeleteSingle,
-  onDeleteSeries,
+  onConfirm,
 }: {
   lesson: Lesson;
   isDeleting: boolean;
   onClose: () => void;
-  onDeleteSingle: () => void;
-  onDeleteSeries: () => void;
+  onConfirm: (scope: LessonDeleteScope) => void;
 }) {
   const isRecurring = Boolean(lesson.lessonSeriesId);
+  const [scope, setScope] = useState<LessonDeleteScope>('SINGLE');
+  const options: Array<{ value: LessonDeleteScope; label: string }> = isRecurring
+    ? [
+        { value: 'SINGLE', label: 'This event' },
+        { value: 'FOLLOWING', label: 'This and following events' },
+        { value: 'SERIES', label: 'All events' },
+      ]
+    : [{ value: 'SINGLE', label: 'This lesson' }];
+
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Delete lesson" onMouseDown={isDeleting ? undefined : onClose}>
       <article className="w-full max-w-md rounded-t-xl border border-border bg-card p-4 shadow-xl sm:rounded-lg sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
@@ -757,35 +769,28 @@ function DeleteLessonModal({
         </div>
         <p className="mt-4 text-sm text-muted-foreground">
           {isRecurring
-            ? 'This lesson repeats. What should be removed?'
+            ? 'Choose which recurring lessons to delete.'
             : 'This lesson and its synced Google Calendar event will be removed.'}
         </p>
-        <div className={isRecurring ? 'mt-5 grid gap-2' : 'mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'}>
-          {isRecurring && (
-            <button className="button-secondary justify-start gap-3 bg-card px-3 py-3 text-left text-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSingle} disabled={isDeleting}>
-              <Icon name="trash" className="h-4 w-4 shrink-0 text-destructive" />
-              <span>
-                <span className="block text-sm font-semibold">Delete this event</span>
-                <span className="block text-xs font-normal text-muted-foreground">Keep the rest of the series.</span>
-              </span>
-            </button>
-          )}
-          {isRecurring && (
-            <button className="button-secondary justify-start gap-3 bg-card px-3 py-3 text-left text-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSeries} disabled={isDeleting}>
-              <Icon name="trash" className="h-4 w-4 shrink-0 text-destructive" />
-              <span>
-                <span className="block text-sm font-semibold">Delete entire series</span>
-                <span className="block text-xs font-normal text-muted-foreground">Remove every repeated lesson.</span>
-              </span>
-            </button>
-          )}
-          {!isRecurring && (
-            <button className="button gap-2 bg-destructive hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSingle} disabled={isDeleting}>
-              <Icon name="trash" className="h-4 w-4" />
-              Delete lesson
-            </button>
-          )}
-          <button className={isRecurring ? 'button-secondary mt-1' : 'button-secondary'} type="button" onClick={onClose} disabled={isDeleting}>Cancel</button>
+        <div className="mt-5 grid gap-3">
+          {options.map((option) => (
+            <label key={option.value} className="flex cursor-pointer items-center gap-3 text-sm text-foreground">
+              <input
+                className="h-5 w-5 accent-primary"
+                type="radio"
+                name="delete-scope"
+                value={option.value}
+                checked={scope === option.value}
+                disabled={isDeleting}
+                onChange={() => setScope(option.value)}
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <button className="button-secondary border-transparent bg-transparent text-primary hover:bg-accent" type="button" onClick={onClose} disabled={isDeleting}>Cancel</button>
+          <button className="button min-w-20 bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={() => onConfirm(scope)} disabled={isDeleting}>OK</button>
         </div>
       </article>
     </div>

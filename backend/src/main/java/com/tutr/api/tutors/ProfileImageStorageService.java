@@ -1,6 +1,9 @@
 package com.tutr.api.tutors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -24,6 +27,16 @@ public class ProfileImageStorageService {
     );
 
     private final Path profileImageDir = Paths.get("uploads", "profile-images").toAbsolutePath().normalize();
+    private final RestClient restClient = RestClient.create();
+
+    @Value("${app.supabase.url:}")
+    private String supabaseUrl;
+
+    @Value("${app.supabase.service-role-key:}")
+    private String supabaseServiceRoleKey;
+
+    @Value("${app.supabase.profile-image-bucket:profile-images}")
+    private String profileImageBucket;
 
     public String store(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -39,6 +52,40 @@ public class ProfileImageStorageService {
             throw new IllegalArgumentException("Profile image must be a JPG, PNG, WebP, or GIF");
         }
 
+        if (isSupabaseConfigured()) {
+            return storeInSupabase(file, contentType, extension);
+        }
+        return storeLocally(file, extension);
+    }
+
+    private boolean isSupabaseConfigured() {
+        return !supabaseUrl.isBlank() && !supabaseServiceRoleKey.isBlank() && !profileImageBucket.isBlank();
+    }
+
+    private String storeInSupabase(MultipartFile file, String contentType, String extension) {
+        String objectPath = "tutors/" + UUID.randomUUID() + extension;
+        try {
+            restClient.post()
+                    .uri(supabaseUrlWithoutTrailingSlash() + "/storage/v1/object/" + profileImageBucket + "/" + objectPath)
+                    .header("Authorization", "Bearer " + supabaseServiceRoleKey)
+                    .header("x-upsert", "true")
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(file.getBytes())
+                    .retrieve()
+                    .toBodilessEntity();
+            return supabaseUrlWithoutTrailingSlash() + "/storage/v1/object/public/" + profileImageBucket + "/" + objectPath;
+        } catch (IOException ex) {
+            throw new IllegalStateException("Could not read profile image", ex);
+        } catch (RuntimeException ex) {
+            throw new IllegalStateException("Could not store profile image in Supabase", ex);
+        }
+    }
+
+    private String supabaseUrlWithoutTrailingSlash() {
+        return supabaseUrl.endsWith("/") ? supabaseUrl.substring(0, supabaseUrl.length() - 1) : supabaseUrl;
+    }
+
+    private String storeLocally(MultipartFile file, String extension) {
         try {
             Files.createDirectories(profileImageDir);
             String filename = UUID.randomUUID() + extension;

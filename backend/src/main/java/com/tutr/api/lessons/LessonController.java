@@ -69,4 +69,10 @@ public class LessonController {
     void deleteSeries(@AuthenticationPrincipal User user, @PathVariable UUID id) {
         service.deleteSeries(user, id);
     }
+
+    @DeleteMapping("/{id}/following")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteFollowing(@AuthenticationPrincipal User user, @PathVariable UUID id) {
+        service.deleteFollowing(user, id);
+    }
 }

@@ -33,3 +33,7 @@ export async function deleteLesson(id: string) {
 export async function deleteLessonSeries(id: string) {
   await api.delete(`/lessons/${id}/series`);
 }
+
+export async function deleteFollowingLessons(id: string) {
+  await api.delete(`/lessons/${id}/following`);
+}

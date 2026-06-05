@@ -143,6 +143,32 @@ public class LessonService {
         lessonSeries.delete(tutorSeries);
     }
 
+    @Transactional
+    public void deleteFollowing(User tutor, UUID lessonId) {
+        Lesson lesson = lessonFor(tutor, lessonId);
+        LessonSeries series = lesson.getLessonSeries();
+        if (series == null) {
+            delete(tutor, lessonId);
+            return;
+        }
+
+        LessonSeries tutorSeries = lessonSeries.findByIdAndTutor(series.getId(), tutor)
+                .orElseThrow(() -> new EntityNotFoundException("Lesson series not found"));
+        List<Lesson> seriesLessons = lessons.findByLessonSeriesOrderByLessonDateAsc(tutorSeries);
+        List<Lesson> followingLessons = seriesLessons.stream()
+                .filter(seriesLesson -> !seriesLesson.getLessonDate().isBefore(lesson.getLessonDate()))
+                .toList();
+        if (followingLessons.size() == seriesLessons.size()) {
+            googleCalendar.deleteSeriesEvent(tutorSeries);
+            lessons.deleteByLessonSeries(tutorSeries);
+            lessonSeries.delete(tutorSeries);
+            return;
+        }
+
+        googleCalendar.endSeriesBefore(lesson);
+        lessons.deleteAll(followingLessons);
+    }
+
     public Lesson lessonFor(User tutor, UUID id) {
         return lessons.findByIdAndTutor(id, tutor).orElseThrow(() -> new EntityNotFoundException("Lesson not found"));
     }
