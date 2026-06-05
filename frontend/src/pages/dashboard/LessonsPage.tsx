@@ -771,11 +771,11 @@ function DeleteLessonModal({
             </button>
           )}
           {isRecurring && (
-            <button className="button justify-start gap-3 bg-destructive px-3 py-3 text-left hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSeries} disabled={isDeleting}>
-              <Icon name="trash" className="h-4 w-4 shrink-0" />
+            <button className="button-secondary justify-start gap-3 bg-card px-3 py-3 text-left text-foreground hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={onDeleteSeries} disabled={isDeleting}>
+              <Icon name="trash" className="h-4 w-4 shrink-0 text-destructive" />
               <span>
                 <span className="block text-sm font-semibold">Delete entire series</span>
-                <span className="block text-xs font-normal text-destructive-foreground/80">Remove every repeated lesson.</span>
+                <span className="block text-xs font-normal text-muted-foreground">Remove every repeated lesson.</span>
               </span>
             </button>
           )}
