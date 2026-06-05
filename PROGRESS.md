@@ -203,6 +203,68 @@ filter earnings by recorded period, and export the exact view they are seeing.
   due dates, and outstanding balances.
 - Add configurable lesson and overdue-payment reminders.
 
+## 2026-06-04 - Calendar Controls And Avatar Resilience
+
+### Completed
+
+- Refined lesson calendar form controls and visual polish across dashboard and
+  public pages.
+- Added Google Calendar color support for lessons and series.
+- Improved recurring lesson deletion flows, including backend endpoints and
+  frontend delete choices.
+- Made tutor avatars more resilient with a shared avatar component and cleaner
+  fallbacks across cards, profile pages, and settings.
+- Simplified the health endpoint response while keeping it suitable for hosted
+  platform checks.
+
+### Outcome
+
+Lesson editing and recurring deletion became clearer, calendar sync metadata
+became richer, and public tutor/profile imagery handled missing or broken
+images more gracefully.
+
+## 2026-06-05 - Hosted Beta Polish And UI Refactor
+
+### Completed
+
+- Fixed Google Calendar deletion sync so removed lessons and recurring series
+  are handled more reliably.
+- Added Supabase-backed profile image storage configuration and service support.
+- Added the initial GitHub Actions workflow for pinging the Render API health
+  endpoint on a schedule.
+- Refactored the dashboard UI toward shared Material UI patterns, splitting the
+  lessons workspace into smaller components for forms, tables, dialogs, Google
+  Calendar status, constants, and helpers.
+- Improved lesson flows with custom lesson links, tutor profile year support,
+  and more complete lesson form/table behavior.
+- Improved public tutor search and authentication page flows.
+- Fixed weekly lesson card status layout after the UI refactor.
+
+### Outcome
+
+The hosted beta became more production-shaped: profile images could move to
+Supabase storage, the API gained scheduled keep-awake support, calendar deletion
+sync was safer, and the frontend moved toward more consistent reusable UI
+structure.
+
+## 2026-06-06 - Render Keep-Awake Stabilization
+
+### Completed
+
+- Updated the GitHub Actions keep-awake workflow so a missing
+  `TUTR_API_HEALTH_URL` repository variable creates a notice instead of a
+  repeated scheduled failure.
+- Increased the Render API health ping timeout and retry window to better
+  tolerate free-tier cold starts after periods with no traffic.
+- Verified the deployed backend health endpoint at
+  `https://tutr-api.onrender.com/api/v1/health` returns `204 No Content`.
+- Pushed the workflow update to `main`.
+
+### Outcome
+
+The scheduled keep-awake job is less noisy and more resilient when the Render
+backend needs extra time to wake after being idle.
+
 ## Current Focus
 
 - Stabilize the beta deployment and verify the full hosted workflow after each
