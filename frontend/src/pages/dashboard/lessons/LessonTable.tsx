@@ -182,13 +182,28 @@ function HistorySelect({ label, value, onChange, options, placeholder }: { label
 }
 
 function LessonLinks({ lesson }: { lesson: Lesson }) {
+  const customLinks = lessonLinksForDisplay(lesson);
   return (
     <Stack spacing={0.25}>
       {lesson.googleMeetLink && <Link href={lesson.googleMeetLink} target="_blank" rel="noreferrer" underline="hover">Meeting</Link>}
-      {lesson.miroBoardUrl && <Link href={lesson.miroBoardUrl} target="_blank" rel="noreferrer" underline="hover">Board</Link>}
-      {!lesson.googleMeetLink && !lesson.miroBoardUrl && <Typography variant="body2" color="text.secondary">No links</Typography>}
+      {customLinks.map((link, index) => (
+        <Link key={`${link.label}-${link.url}-${index}`} href={link.url} target="_blank" rel="noreferrer" underline="hover">
+          {link.label || 'Link'}
+        </Link>
+      ))}
+      {!lesson.googleMeetLink && customLinks.length === 0 && <Typography variant="body2" color="text.secondary">No links</Typography>}
     </Stack>
   );
+}
+
+function lessonLinksForDisplay(lesson: Lesson) {
+  if (lesson.lessonLinks?.length) {
+    return lesson.lessonLinks.filter((link) => link.url?.trim());
+  }
+  if (lesson.miroBoardUrl) {
+    return [{ label: 'Board', url: lesson.miroBoardUrl }];
+  }
+  return [];
 }
 
 function GoogleBadge({ lesson }: { lesson: Lesson }) {

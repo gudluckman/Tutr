@@ -2,6 +2,7 @@ package com.tutr.api.calendar;
 
 import com.tutr.api.lessons.GoogleSyncStatus;
 import com.tutr.api.lessons.Lesson;
+import com.tutr.api.lessons.LessonLink;
 import com.tutr.api.lessons.LessonRepository;
 import com.tutr.api.lessons.LessonSeries;
 import com.tutr.api.lessons.LessonSeriesRepository;
@@ -136,6 +137,7 @@ public class GoogleCalendarSyncService {
                     lesson.getLessonDate().plusSeconds(lesson.getDurationMinutes() * 60L).toString(),
                     lesson.getStudent().getName(),
                     lesson.getMiroBoardUrl(),
+                    lesson.getLessonLinks(),
                     lesson.getLessonNotes(),
                     lesson.getHomework(),
                     lesson.getInviteEmail(),
@@ -189,6 +191,7 @@ public class GoogleCalendarSyncService {
                     series.getFirstLessonDate().plusSeconds(series.getDurationMinutes() * 60L).toString(),
                     series.getStudent().getName(),
                     series.getMiroBoardUrl(),
+                    series.getLessonLinks(),
                     null,
                     null,
                     series.getInviteEmail(),
@@ -410,10 +413,10 @@ public class GoogleCalendarSyncService {
         return Optional.of(OffsetDateTime.parse(String.valueOf(dateTime)).toInstant());
     }
 
-    private Map<String, Object> eventBody(String summary, String start, String end, String studentName, String boardUrl, String lessonNotes, String homework, String attendeeEmail, String colorId, Integer extraReminderMinutes) {
+    private Map<String, Object> eventBody(String summary, String start, String end, String studentName, String boardUrl, List<LessonLink> lessonLinks, String lessonNotes, String homework, String attendeeEmail, String colorId, Integer extraReminderMinutes) {
         Map<String, Object> event = new HashMap<>();
         event.put("summary", summary);
-        event.put("description", eventDescription(studentName, boardUrl, lessonNotes, homework));
+        event.put("description", eventDescription(studentName, boardUrl, lessonLinks, lessonNotes, homework));
         event.put("start", Map.of("dateTime", start, "timeZone", "UTC"));
         event.put("end", Map.of("dateTime", end, "timeZone", "UTC"));
         event.put("conferenceData", Map.of(
@@ -441,7 +444,7 @@ public class GoogleCalendarSyncService {
         return reminders;
     }
 
-    private String eventDescription(String studentName, String boardUrl, String lessonNotes, String homework) {
+    private String eventDescription(String studentName, String boardUrl, List<LessonLink> lessonLinks, String lessonNotes, String homework) {
         StringBuilder description = new StringBuilder("Student: ").append(studentName);
         if (lessonNotes != null && !lessonNotes.isBlank()) {
             description.append("\n\nLesson notes:\n").append(lessonNotes);
@@ -449,10 +452,26 @@ public class GoogleCalendarSyncService {
         if (homework != null && !homework.isBlank()) {
             description.append("\n\nHomework:\n").append(homework);
         }
-        if (boardUrl != null && !boardUrl.isBlank()) {
-            description.append("\n\nBoard link: ").append(boardUrl);
+        List<LessonLink> links = lessonLinks == null || lessonLinks.isEmpty()
+                ? legacyBoardLink(boardUrl)
+                : lessonLinks;
+        if (!links.isEmpty()) {
+            description.append("\n\nLinks:");
+            for (LessonLink link : links) {
+                if (link.url() != null && !link.url().isBlank()) {
+                    String label = link.label() == null || link.label().isBlank() ? "Link" : link.label();
+                    description.append("\n").append(label).append(": ").append(link.url());
+                }
+            }
         }
         return description.toString();
+    }
+
+    private List<LessonLink> legacyBoardLink(String boardUrl) {
+        if (boardUrl == null || boardUrl.isBlank()) {
+            return List.of();
+        }
+        return List.of(new LessonLink("Board", boardUrl));
     }
 
     @SuppressWarnings("unchecked")

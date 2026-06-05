@@ -4,6 +4,7 @@ import com.tutr.api.common.BaseEntity;
 import com.tutr.api.students.Student;
 import com.tutr.api.users.User;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -16,6 +17,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 @Getter
 @Setter
@@ -56,6 +58,9 @@ public class Lesson extends BaseEntity {
     private String lessonNotes;
     private String homework;
     private String miroBoardUrl;
+    @Convert(converter = LessonLinksConverter.class)
+    @Column(columnDefinition = "TEXT")
+    private List<LessonLink> lessonLinks = List.of();
     private String inviteEmail;
 
     private String googleEventId;

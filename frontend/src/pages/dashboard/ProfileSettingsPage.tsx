@@ -92,6 +92,7 @@ export function ProfileSettingsPage() {
             </Stack>
             <ProfileTextField label="Headline" value={form.headline ?? ''} placeholder="e.g. VCE Maths specialist | ATAR 99.5" onChange={(value) => setForm({ ...form, headline: value })} />
             <ProfileTextField label="Location" value={form.location ?? ''} placeholder="e.g. Sydney, NSW" onChange={(value) => setForm({ ...form, location: value })} />
+            <ProfileTextField label="Tutor year" value={form.tutorYear ?? ''} placeholder="e.g. Year 10" onChange={(value) => setForm({ ...form, tutorYear: value })} />
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
               <ProfileTextField label="Min hourly rate (AUD)" type="number" value={String(form.hourlyRateMin ?? 0)} onChange={(value) => setForm({ ...form, hourlyRateMin: Number(value) })} />
               <ProfileTextField label="Max hourly rate (AUD)" type="number" value={String(form.hourlyRateMax ?? 0)} onChange={(value) => setForm({ ...form, hourlyRateMax: Number(value) })} />

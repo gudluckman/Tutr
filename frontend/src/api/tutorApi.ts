@@ -2,7 +2,7 @@ import { api } from './client';
 import type { EnquiryPayload } from '../types/enquiry';
 import type { TutorProfile } from '../types/tutor';
 
-export async function searchTutors(params?: { subject?: string; location?: string; online?: boolean }) {
+export async function searchTutors(params?: { subject?: string; location?: string; tutorYear?: string; online?: boolean }) {
   const { data } = await api.get<TutorProfile[]>('/public/tutors', { params });
   return data;
 }

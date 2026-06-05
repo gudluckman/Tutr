@@ -165,6 +165,7 @@ export function LessonsPage() {
       lessonNotes: lesson.lessonNotes ?? '',
       homework: lesson.homework ?? '',
       miroBoardUrl: lesson.miroBoardUrl ?? '',
+      lessonLinks: lessonLinksForForm(lesson),
       inviteEmail: lesson.inviteEmail ?? '',
       googleColorId: lesson.googleColorId ?? '',
       googleExtraReminderMinutes: lesson.googleExtraReminderMinutes ?? null,
@@ -207,6 +208,7 @@ export function LessonsPage() {
             onChange={(_, value: LessonsWorkspaceView | null) => value && setWorkspaceView(value)}
             aria-label="Lesson workspace view"
             fullWidth
+            sx={segmentedControlSx}
           >
             {(['CALENDAR', 'TABLE'] as LessonsWorkspaceView[]).map((option) => (
               <ToggleButton key={option} value={option}>{statusLabel(option)}</ToggleButton>
@@ -270,7 +272,7 @@ export function LessonsPage() {
                   size="small"
                   onChange={(_, value: FormMode | null) => value && setMode(value)}
                   aria-label="Lesson form mode"
-                  sx={{ mt: 1.5 }}
+                  sx={{ ...segmentedControlSx, mt: 1.5 }}
                 >
                   <ToggleButton value="single">Single</ToggleButton>
                   <ToggleButton value="recurring">Recurring</ToggleButton>
@@ -322,6 +324,16 @@ export function LessonsPage() {
       )}
     </Box>
   );
+}
+
+function lessonLinksForForm(lesson: Lesson) {
+  if (lesson.lessonLinks?.length) {
+    return lesson.lessonLinks;
+  }
+  if (lesson.miroBoardUrl) {
+    return [{ label: 'Board', url: lesson.miroBoardUrl }];
+  }
+  return [];
 }
 
 function LessonCalendar({
@@ -376,6 +388,7 @@ function LessonCalendar({
           size="small"
           onChange={(_, value: CalendarView | null) => value && onViewChange(value)}
           aria-label="Calendar view"
+          sx={segmentedControlSx}
         >
           {(['DAILY', 'WEEKLY', 'MONTHLY'] as CalendarView[]).map((option) => (
             <ToggleButton key={option} value={option}>{statusLabel(option)}</ToggleButton>
@@ -559,12 +572,12 @@ function WeeklyCalendar({
 
   return (
     <div className="max-h-[640px] overflow-auto">
-      <div className="grid min-h-[360px] md:min-w-[1120px] md:grid-cols-7">
+      <div className="grid min-h-[360px] sm:grid-cols-2 xl:grid-cols-7">
         {Array.from({ length: 7 }).map((_, index) => {
           const day = addDays(weekStart, index);
           const dayLessons = lessons.filter((lesson) => isSameDay(new Date(lesson.lessonDate), day));
           return (
-            <div key={day.toISOString()} className="border-b border-border p-3 md:border-b-0 md:border-r md:last:border-r-0">
+            <div key={day.toISOString()} className="border-b border-border p-3 sm:border-r sm:[&:nth-child(2n)]:border-r-0 xl:border-b-0 xl:[&:nth-child(2n)]:border-r xl:[&:nth-child(7n)]:border-r-0">
               <p className="text-sm font-medium text-foreground">{day.toLocaleDateString('en-AU', { weekday: 'short' })}</p>
               <p className={`mb-3 text-xs ${isSameDay(day, new Date()) ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{day.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}</p>
               <div className="space-y-2">
@@ -623,17 +636,40 @@ function MonthlyCalendar({
               const dayLessons = lessons.filter((lesson) => isSameDay(new Date(lesson.lessonDate), day));
               const isCurrentMonth = day.getMonth() === date.getMonth();
               return (
-                <div key={day.toISOString()} className="min-h-28 border-b border-r border-border p-2 [&:nth-child(7n)]:border-r-0">
-                  <p className={`mb-1 text-xs ${isSameDay(day, new Date()) ? 'inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground' : isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/60'}`}>{day.getDate()}</p>
-                  <div className="space-y-1">
-                    {dayLessons.slice(0, 3).map((lesson) => (
-                      <div key={lesson.id} className="group relative">
-                        <ButtonBase className={`block w-full truncate rounded px-2 py-1 text-left text-[11px] font-medium transition-colors ${calendarPaymentPalette(lesson).chip}`} onClick={() => setSelectedLessonId(lesson.id)}>
-                          {timeLabel(lesson.lessonDate)} {lesson.studentName}
-                        </ButtonBase>
-                        <LessonHoverCard lesson={lesson} />
-                      </div>
-                    ))}
+                <div key={day.toISOString()} className="min-h-32 border-b border-r border-border p-2 [&:nth-child(7n)]:border-r-0">
+                  <div className="mb-2 flex h-6 items-center">
+                    <span className={`text-xs ${isSameDay(day, new Date()) ? 'inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground' : isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/60'}`}>
+                      {day.getDate()}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {dayLessons.slice(0, 3).map((lesson) => {
+                      const palette = calendarPaymentPalette(lesson);
+                      return (
+                        <div key={lesson.id} className="group relative">
+                          <ButtonBase
+                            className={`relative w-full overflow-hidden rounded-md border border-border bg-white text-left text-[12px] shadow-sm transition-all hover:-translate-y-px hover:border-neutral-300 hover:shadow ${palette.chip}`}
+                            onClick={() => setSelectedLessonId(lesson.id)}
+                            sx={{
+                              alignItems: 'center',
+                              display: 'flex',
+                              justifyContent: 'flex-start',
+                              minHeight: 40,
+                              px: 1,
+                              py: 0.75,
+                              pl: 1.5,
+                            }}
+                          >
+                            <span className={`absolute inset-y-0 left-0 w-1 ${palette.rail}`} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[11px] font-medium leading-snug opacity-80">{timeLabel(lesson.lessonDate)}</span>
+                              <span className="block truncate font-medium leading-snug text-foreground">{lesson.studentName}</span>
+                            </span>
+                          </ButtonBase>
+                          <LessonHoverCard lesson={lesson} />
+                        </div>
+                      );
+                    })}
                     {dayLessons.length > 3 && <p className="px-1 text-[11px] text-muted-foreground">+{dayLessons.length - 3} more</p>}
                   </div>
                 </div>
@@ -686,52 +722,101 @@ function MonthlyLessonModal({
   onUpdatePaymentStatus: (status: PaymentStatus) => void;
 }) {
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-label={`${lesson.title || 'Lesson'} details`}>
-      <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
-        <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+    <Dialog
+      open
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      aria-label={`${lesson.title || 'Lesson'} details`}
+      sx={{ '& .MuiDialog-paper': { bgcolor: '#f7f7f7', borderRadius: 2, overflow: 'hidden' } }}
+    >
+      <DialogContent sx={{ p: 0 }}>
+        <Stack direction="row" sx={{ alignItems: 'flex-start', bgcolor: 'background.paper', justifyContent: 'space-between', gap: 2, px: { xs: 2.5, sm: 3 }, pt: 2.5, pb: 1.5 }}>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>{lesson.title || 'Tutoring lesson'}</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{lesson.studentName}</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.25 }}>{lesson.title || 'Tutoring lesson'}</Typography>
           </Box>
-          <IconButton type="button" onClick={onClose} aria-label="Close lesson details">
+          <IconButton type="button" onClick={onClose} aria-label="Close lesson details" sx={{ mt: -0.5 }}>
             <Icon name="x" className="h-4 w-4" />
           </IconButton>
         </Stack>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5, mt: 2, color: 'text.secondary', fontSize: 14 }}>
-          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}><Icon name="calendar" className="h-4 w-4" />{new Date(lesson.lessonDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</Stack>
-          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}><Icon name="clock" className="h-4 w-4" />{lessonTimeRange(lesson)}</Stack>
-          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}><Icon name="dollar" className="h-4 w-4" />{lesson.hourlyRate}/hr ({lessonAmount(lesson)} total)</Stack>
-          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-            <CalendarStatusSelect
-              ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
-              value={lesson.status}
-              options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']}
-              tone={lessonStatusStyles[lesson.status]}
-              disabled={isUpdating}
-              onChange={(value) => onUpdateStatus(value as LessonStatus)}
-            />
-            <CalendarStatusSelect
-              ariaLabel={`Payment status for ${lesson.title || 'lesson'}`}
-              value={lesson.paymentStatus}
-              options={['UNPAID', 'PAID', 'PARTIAL']}
-              tone={paymentStatusStyles[lesson.paymentStatus]}
-              disabled={isUpdating}
-              onChange={(value) => onUpdatePaymentStatus(value as PaymentStatus)}
-            />
-          </Stack>
+
+        <Box sx={{ bgcolor: '#f7f7f7', px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, columnGap: 5, rowGap: 2 }}>
+            <LessonSummaryLine icon="calendar" value={new Date(lesson.lessonDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })} />
+            <LessonSummaryLine icon="clock" value={lessonTimeRange(lesson)} />
+            <LessonSummaryLine icon="dollar" value={`${lesson.hourlyRate}/hr (${lessonAmount(lesson)} total)`} />
+            <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <CalendarStatusSelect
+                ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
+                value={lesson.status}
+                options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']}
+                tone={lessonStatusStyles[lesson.status]}
+                disabled={isUpdating}
+                onChange={(value) => onUpdateStatus(value as LessonStatus)}
+              />
+              <CalendarStatusSelect
+                ariaLabel={`Payment status for ${lesson.title || 'lesson'}`}
+                value={lesson.paymentStatus}
+                options={['UNPAID', 'PAID', 'PARTIAL']}
+                tone={paymentStatusStyles[lesson.paymentStatus]}
+                disabled={isUpdating}
+                onChange={(value) => onUpdatePaymentStatus(value as PaymentStatus)}
+              />
+            </Stack>
+          </Box>
+
+          {lesson.lessonNotes && (
+            <Paper variant="outlined" sx={{ mt: 2, p: 1.5, borderColor: '#e2e2e2', bgcolor: 'background.paper' }}>
+              <Typography variant="caption" color="text.secondary">Notes</Typography>
+              <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{lesson.lessonNotes}</Typography>
+            </Paper>
+          )}
         </Box>
-        {lesson.lessonNotes && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, borderTop: 1, borderColor: 'divider', pt: 2 }}>
-            {lesson.lessonNotes}
-          </Typography>
-        )}
-        <Stack direction={{ xs: 'column-reverse', sm: 'row' }} sx={{ justifyContent: 'flex-end', gap: 1, mt: 3 }}>
-          <Button variant="outlined" color="error" type="button" startIcon={<Icon name="trash" className="h-4 w-4" />} onClick={onDelete}>Delete lesson</Button>
-          <Button variant="outlined" type="button" onClick={onClose}>Close</Button>
-          <Button variant="contained" type="button" startIcon={<Icon name="edit" className="h-4 w-4" />} onClick={onEdit}>Edit lesson</Button>
+
+        <Stack direction={{ xs: 'column-reverse', sm: 'row' }} sx={{ bgcolor: '#f7f7f7', borderTop: 1, borderColor: '#e4e4e4', justifyContent: 'flex-end', gap: 1, px: { xs: 2.5, sm: 3 }, py: 2 }}>
+          <Button
+            variant="outlined"
+            type="button"
+            size="small"
+            startIcon={<Icon name="trash" className="h-3.5 w-3.5" />}
+            onClick={onDelete}
+            sx={{ borderColor: '#fecaca', color: '#dc2626', minHeight: 36, textTransform: 'none', '&:hover': { borderColor: '#fca5a5', bgcolor: '#fff1f2' } }}
+          >
+            Delete lesson
+          </Button>
+          <Button
+            variant="outlined"
+            type="button"
+            size="small"
+            onClick={onClose}
+            sx={{ borderColor: '#d4d4d4', color: '#525252', minHeight: 36, textTransform: 'none', '&:hover': { borderColor: '#a3a3a3', bgcolor: '#eeeeee' } }}
+          >
+            Close
+          </Button>
+          <Button
+            variant="contained"
+            type="button"
+            size="small"
+            startIcon={<Icon name="edit" className="h-3.5 w-3.5" />}
+            onClick={onEdit}
+            sx={{ bgcolor: '#52525b', minHeight: 36, textTransform: 'none', '&:hover': { bgcolor: '#3f3f46' } }}
+          >
+            Edit lesson
+          </Button>
         </Stack>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function LessonSummaryLine({ icon, value }: { icon: 'calendar' | 'clock' | 'dollar'; value: string }) {
+  return (
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+      <Box sx={{ color: 'text.secondary', display: 'flex' }}>
+        <Icon name={icon} className="h-4 w-4" />
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>{value}</Typography>
+    </Stack>
   );
 }
 
@@ -766,16 +851,27 @@ function CalendarLessonCard({
   return (
     <article className="group relative overflow-hidden rounded-lg border border-border/80 bg-muted/45 p-2.5 pl-3.5 text-xs shadow-sm transition-all hover:border-border hover:bg-muted/70 hover:shadow">
       <span className={`absolute inset-y-0 left-0 w-1 ${palette.rail}`} />
-      <div className="flex items-start justify-between gap-1">
-        <div className="min-w-0">
-          <div className="flex flex-wrap gap-1">
-            <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${palette.pill}`}>
+      <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-w-0 items-start justify-between gap-1">
+          <div className="min-w-0 flex-1 pr-1">
+            <span className={`inline-flex max-w-full shrink items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${palette.pill}`}>
               <Icon name="clock" className="h-3 w-3 shrink-0" />
-              {lessonTimeRange(lesson)}
+              <span className="min-w-0 truncate">{lessonTimeRange(lesson)}</span>
             </span>
           </div>
+          <div className="flex shrink-0 opacity-60 transition-opacity group-hover:opacity-100">
+            <IconButton size="small" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`} sx={{ p: 0.25 }}>
+              <Icon name="edit" className="h-3 w-3" />
+            </IconButton>
+            <IconButton size="small" color="error" onClick={onDelete} aria-label={`Delete ${lesson.title || 'lesson'}`} sx={{ p: 0.25 }}>
+              <Icon name="trash" className="h-3 w-3" />
+            </IconButton>
+          </div>
+        </div>
+
+        <div className="min-w-0">
           {student && lesson.title === lessonTitle(student) ? (
-            <div className="mt-1.5 space-y-1">
+            <div className="space-y-1">
               <p className="whitespace-normal break-words font-semibold leading-tight text-foreground">{student.name}</p>
               {student.schoolYear && (
                 <p className="flex items-start gap-1 text-[10px] leading-tight text-muted-foreground">
@@ -792,23 +888,15 @@ function CalendarLessonCard({
               <WeeklyLessonRate lesson={lesson} />
             </div>
           ) : (
-            <div className="mt-1.5 space-y-1">
+            <div className="space-y-1">
               <p className="whitespace-normal break-words font-semibold leading-tight text-foreground">{lesson.title || 'Tutoring lesson'}</p>
               <WeeklyLessonRate lesson={lesson} />
             </div>
           )}
         </div>
-        <div className="flex shrink-0">
-          <IconButton size="small" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`} sx={{ p: 0.5 }}>
-            <Icon name="edit" className="h-3.5 w-3.5" />
-          </IconButton>
-          <IconButton size="small" color="error" onClick={onDelete} aria-label={`Delete ${lesson.title || 'lesson'}`} sx={{ p: 0.5 }}>
-            <Icon name="trash" className="h-3.5 w-3.5" />
-          </IconButton>
-        </div>
       </div>
       {lesson.lessonSeriesId && <span className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Recurring</span>}
-      <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+      <div className="mt-2 grid gap-1.5 border-t border-border pt-2 min-[420px]:grid-cols-2 xl:grid-cols-1">
         <QuickStatusSelect
           label="Lesson"
           ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
@@ -860,15 +948,15 @@ function CalendarStatusSelect({ ariaLabel, value, options, tone, disabled, onCha
 
 function QuickStatusSelect({ label, ariaLabel, value, options, tone, disabled, onChange }: { label: string; ariaLabel: string; value: string; options: string[]; tone: string; disabled: boolean; onChange: (value: string) => void }) {
   return (
-    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase' }}>{label}</Typography>
+    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 0.5, minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, fontSize: 9, fontWeight: 600, letterSpacing: 0, textTransform: 'uppercase' }}>{label}</Typography>
       <Select
         aria-label={ariaLabel}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         displayEmpty
-        sx={statusSelectSx(tone, 10, 96)}
+        sx={statusSelectSx(tone, 10, 78)}
         className={tone}
       >
         {options.map((option) => <MenuItem key={option} value={option}>{statusLabel(option)}</MenuItem>)}
@@ -876,6 +964,34 @@ function QuickStatusSelect({ label, ariaLabel, value, options, tone, disabled, o
     </Stack>
   );
 }
+
+const segmentedControlSx = {
+  border: 1,
+  borderColor: '#dddddd',
+  borderRadius: 1.5,
+  bgcolor: '#f5f5f5',
+  p: 0.5,
+  gap: 0.25,
+  '& .MuiToggleButton-root': {
+    border: 0,
+    borderRadius: 1,
+    px: 1.5,
+    py: 0.75,
+    color: 'text.secondary',
+    fontSize: 14,
+    fontWeight: 400,
+    textTransform: 'none',
+    '&.Mui-selected': {
+      bgcolor: 'background.paper',
+      color: 'text.primary',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08)',
+      fontWeight: 500,
+    },
+    '&.Mui-selected:hover': {
+      bgcolor: 'background.paper',
+    },
+  },
+};
 
 function statusSelectSx(tone: string, fontSize: number, minWidth: number) {
   const palette = statusTonePalette(tone);

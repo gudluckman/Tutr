@@ -16,10 +16,11 @@ import static com.tutr.api.tutors.TutorDtos.*;
 public class TutorProfileService {
     private final TutorProfileRepository profiles;
 
-    public List<TutorProfileResponse> searchPublic(String subject, String location, Boolean online) {
+    public List<TutorProfileResponse> searchPublic(String subject, String location, String tutorYear, Boolean online) {
         return profiles.findByIsPublicTrue().stream()
                 .filter(profile -> matchesSubject(profile, subject))
                 .filter(profile -> matchesLocation(profile, location))
+                .filter(profile -> matchesTutorYear(profile, tutorYear))
                 .filter(profile -> online == null || profile.isOnline() == online)
                 .map(TutorProfileResponse::from)
                 .toList();
@@ -59,6 +60,7 @@ public class TutorProfileService {
         profile.setHeadline(request.headline());
         profile.setBio(request.bio());
         profile.setLocation(request.location());
+        profile.setTutorYear(request.tutorYear());
         profile.setOnline(request.online());
         profile.setHourlyRateMin(request.hourlyRateMin());
         profile.setHourlyRateMax(request.hourlyRateMax());
@@ -95,6 +97,13 @@ public class TutorProfileService {
             return true;
         }
         return contains(profile.getLocation(), location.toLowerCase(Locale.ROOT));
+    }
+
+    private boolean matchesTutorYear(TutorProfile profile, String tutorYear) {
+        if (tutorYear == null || tutorYear.isBlank()) {
+            return true;
+        }
+        return contains(profile.getTutorYear(), tutorYear.toLowerCase(Locale.ROOT));
     }
 
     private boolean contains(String value, String term) {

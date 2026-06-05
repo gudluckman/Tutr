@@ -27,8 +27,9 @@ public class PublicTutorController {
     @GetMapping
     List<TutorProfileResponse> search(@RequestParam(required = false) String subject,
                                       @RequestParam(required = false) String location,
+                                      @RequestParam(required = false) String tutorYear,
                                       @RequestParam(required = false) Boolean online) {
-        return tutorProfiles.searchPublic(subject, location, online);
+        return tutorProfiles.searchPublic(subject, location, tutorYear, online);
     }
 
     @GetMapping("/{slug}")
@@ -41,4 +42,3 @@ public class PublicTutorController {
         return enquiries.createPublic(slug, request);
     }
 }
-

@@ -46,6 +46,34 @@ export function DashboardPage() {
             size="small"
             onChange={(_, value: RevenuePeriod | null) => value && setPeriod(value)}
             aria-label="Revenue period"
+            sx={{
+              alignSelf: { xs: 'flex-start', sm: 'center' },
+              border: 1,
+              borderColor: '#dddddd',
+              borderRadius: 1.5,
+              bgcolor: '#f5f5f5',
+              p: 0.5,
+              gap: 0.25,
+              '& .MuiToggleButton-root': {
+                border: 0,
+                borderRadius: 1,
+                px: 1.5,
+                py: 0.75,
+                color: 'text.secondary',
+                fontSize: 14,
+                fontWeight: 400,
+                textTransform: 'none',
+                '&.Mui-selected': {
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08)',
+                  fontWeight: 500,
+                },
+                '&.Mui-selected:hover': {
+                  bgcolor: 'background.paper',
+                },
+              },
+            }}
           >
             {revenuePeriods.map((option) => (
               <ToggleButton key={option} value={option}>{periodOptionLabel(option)}</ToggleButton>

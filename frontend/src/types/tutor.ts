@@ -5,6 +5,7 @@ export type TutorProfile = {
   headline?: string;
   bio?: string;
   location?: string;
+  tutorYear?: string;
   online: boolean;
   hourlyRateMin?: number;
   hourlyRateMax?: number;

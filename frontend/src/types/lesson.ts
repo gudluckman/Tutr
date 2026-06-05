@@ -3,6 +3,11 @@ export type PaymentStatus = 'UNPAID' | 'PAID' | 'PARTIAL';
 export type GoogleSyncStatus = 'NOT_REQUESTED' | 'NOT_CONNECTED' | 'SYNCED' | 'FAILED';
 export type RecurringFrequency = 'WEEKLY';
 
+export type LessonLink = {
+  label: string;
+  url: string;
+};
+
 export type Lesson = {
   id: string;
   lessonSeriesId?: string | null;
@@ -17,6 +22,7 @@ export type Lesson = {
   lessonNotes?: string;
   homework?: string;
   miroBoardUrl?: string;
+  lessonLinks?: LessonLink[];
   inviteEmail?: string;
   googleColorId?: string | null;
   googleExtraReminderMinutes?: number | null;
@@ -48,6 +54,7 @@ export type RecurringLessonPayload = {
   lessonNotes?: string;
   homework?: string;
   miroBoardUrl?: string;
+  lessonLinks?: LessonLink[];
   inviteEmail?: string;
   googleColorId?: string | null;
   googleExtraReminderMinutes?: number | null;

@@ -21,6 +21,7 @@ import static com.tutr.api.lessons.LessonDtos.*;
 public class LessonService {
     private static final List<String> GOOGLE_COLOR_IDS = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
     private static final int MAX_GOOGLE_EXTRA_REMINDER_MINUTES = 28 * 24 * 60;
+    private static final int MAX_LESSON_LINKS = 10;
 
     private final LessonRepository lessons;
     private final LessonSeriesRepository lessonSeries;
@@ -83,7 +84,9 @@ public class LessonService {
         series.setIntervalCount(request.intervalCount() == null ? 1 : request.intervalCount());
         series.setOccurrenceCount(request.occurrenceCount());
         series.setRecurrenceUntil(request.recurrenceUntil());
-        series.setMiroBoardUrl(request.miroBoardUrl());
+        List<LessonLink> links = lessonLinks(request.lessonLinks(), request.miroBoardUrl());
+        series.setLessonLinks(links);
+        series.setMiroBoardUrl(boardUrl(links, request.miroBoardUrl()));
         series.setInviteEmail(inviteEmail(request.inviteEmail(), series.getStudent().getParentEmail()));
         series.setGoogleColorId(googleColorId(request.googleColorId()));
         series.setGoogleExtraReminderMinutes(googleExtraReminderMinutes(request.googleExtraReminderMinutes()));
@@ -105,7 +108,8 @@ public class LessonService {
             lesson.setPaymentStatus(PaymentStatus.UNPAID);
             lesson.setLessonNotes(request.lessonNotes());
             lesson.setHomework(request.homework());
-            lesson.setMiroBoardUrl(request.miroBoardUrl());
+            lesson.setLessonLinks(links);
+            lesson.setMiroBoardUrl(boardUrl(links, request.miroBoardUrl()));
             lesson.setInviteEmail(series.getInviteEmail());
             lesson.setGoogleColorId(series.getGoogleColorId());
             lesson.setGoogleExtraReminderMinutes(series.getGoogleExtraReminderMinutes());
@@ -183,7 +187,9 @@ public class LessonService {
         lesson.setPaymentStatus(request.paymentStatus() == null ? PaymentStatus.UNPAID : request.paymentStatus());
         lesson.setLessonNotes(request.lessonNotes());
         lesson.setHomework(request.homework());
-        lesson.setMiroBoardUrl(request.miroBoardUrl());
+        List<LessonLink> links = lessonLinks(request.lessonLinks(), request.miroBoardUrl());
+        lesson.setLessonLinks(links);
+        lesson.setMiroBoardUrl(boardUrl(links, request.miroBoardUrl()));
         lesson.setInviteEmail(inviteEmail(request.inviteEmail(), lesson.getStudent().getParentEmail()));
         lesson.setGoogleColorId(googleColorId(request.googleColorId()));
         lesson.setGoogleExtraReminderMinutes(googleExtraReminderMinutes(request.googleExtraReminderMinutes()));
@@ -218,6 +224,35 @@ public class LessonService {
         return studentEmail;
     }
 
+    private List<LessonLink> lessonLinks(List<LessonLink> requestedLinks, String legacyBoardUrl) {
+        List<LessonLink> links = new ArrayList<>();
+        if (requestedLinks != null) {
+            for (LessonLink link : requestedLinks) {
+                if (link == null || link.url() == null || link.url().isBlank()) {
+                    continue;
+                }
+                String url = link.url().trim();
+                String label = link.label() == null || link.label().isBlank() ? "Link" : link.label().trim();
+                links.add(new LessonLink(label, url));
+                if (links.size() == MAX_LESSON_LINKS) {
+                    break;
+                }
+            }
+        }
+        if (links.isEmpty() && legacyBoardUrl != null && !legacyBoardUrl.isBlank()) {
+            links.add(new LessonLink("Board", legacyBoardUrl.trim()));
+        }
+        return links;
+    }
+
+    private String boardUrl(List<LessonLink> links, String legacyBoardUrl) {
+        return links.stream()
+                .filter(link -> link.label() != null && link.label().equalsIgnoreCase("Board"))
+                .map(LessonLink::url)
+                .findFirst()
+                .orElse(legacyBoardUrl == null || legacyBoardUrl.isBlank() ? null : legacyBoardUrl.trim());
+    }
+
     private List<Instant> occurrences(LessonSeries series) {
         int count = series.getOccurrenceCount() == null ? 12 : Math.min(series.getOccurrenceCount(), 52);
         List<Instant> dates = new ArrayList<>();
@@ -240,6 +275,7 @@ public class LessonService {
             String lessonNotes,
             String homework,
             String miroBoardUrl,
+            List<LessonLink> lessonLinks,
             String inviteEmail,
             String googleColorId,
             Integer googleExtraReminderMinutes,
@@ -254,6 +290,7 @@ public class LessonService {
                     lesson.getLessonNotes(),
                     lesson.getHomework(),
                     lesson.getMiroBoardUrl(),
+                    lesson.getLessonLinks(),
                     lesson.getInviteEmail(),
                     lesson.getGoogleColorId(),
                     lesson.getGoogleExtraReminderMinutes(),

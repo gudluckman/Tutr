@@ -1,40 +1,50 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Box, Button, Checkbox, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, Stack, TextField, Typography } from '@mui/material';
 import { Icon } from '../../../components/ui/Icon';
-import type { LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../../types/lesson';
+import type { LessonLink, LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../../types/lesson';
 import type { Student } from '../../../types/student';
 import { googleCalendarColors, googleReminderOptions } from './constants';
 import { lessonTitle, statusLabel } from './lessonUtils';
 
 export function SingleLessonFields({ form, setForm, students, googleConnected }: { form: LessonPayload; setForm: (form: LessonPayload) => void; students: Student[]; googleConnected: boolean }) {
+  const setLessonLinks = (lessonLinks: LessonLink[]) => setForm({ ...form, lessonLinks, miroBoardUrl: boardUrlFromLinks(lessonLinks) });
   return (
     <>
-      <StudentSelect value={form.studentId} onChange={(student) => setForm({
-        ...form,
-        studentId: student?.id ?? '',
-        title: student ? lessonTitle(student) : '',
-        hourlyRate: student?.hourlyRate ?? 0,
-        inviteEmail: student?.parentEmail ?? '',
-      })} students={students} />
-      <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
-      <FormInput label="Date and time *" type="datetime-local" value={form.lessonDate} onChange={(value) => setForm({ ...form, lessonDate: value })} required />
-      <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
-      <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
-      <SelectField label="Lesson status *" value={form.status} onChange={(value) => setForm({ ...form, status: value as LessonStatus })} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']} />
-      <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+      <FormRow columns={2}>
+        <StudentSelect value={form.studentId} onChange={(student) => setForm({
+          ...form,
+          studentId: student?.id ?? '',
+          title: student ? lessonTitle(student) : '',
+          hourlyRate: student?.hourlyRate ?? 0,
+          inviteEmail: student?.parentEmail ?? '',
+        })} students={students} />
+        <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
+      </FormRow>
+      <FormRow columns={3}>
+        <FormInput label="Date and time *" type="datetime-local" value={form.lessonDate} onChange={(value) => setForm({ ...form, lessonDate: value })} required />
+        <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
+        <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
+      </FormRow>
+      <FormRow columns={3}>
+        <SelectField label="Lesson status *" value={form.status} onChange={(value) => setForm({ ...form, status: value as LessonStatus })} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']} />
         <SelectField label="Payment status *" value={form.paymentStatus} onChange={(value) => setForm({ ...form, paymentStatus: value as PaymentStatus })} options={['UNPAID', 'PAID', 'PARTIAL']} />
-        <GoogleNotifications value={form.googleExtraReminderMinutes ?? null} disabled={!googleConnected || !form.syncToGoogle} onChange={(googleExtraReminderMinutes) => setForm({ ...form, googleExtraReminderMinutes })} />
-      </div>
-      <CalendarSyncFields
-        boardLink={form.miroBoardUrl ?? ''}
-        inviteEmail={form.inviteEmail ?? ''}
+        <FormInput label="Invite email" type="email" value={form.inviteEmail ?? ''} onChange={(inviteEmail) => setForm({ ...form, inviteEmail })} />
+      </FormRow>
+      <GoogleCalendarOptions
         googleColorId={form.googleColorId ?? ''}
         syncToGoogle={Boolean(form.syncToGoogle)}
         googleConnected={googleConnected}
-        onBoardLinkChange={(miroBoardUrl) => setForm({ ...form, miroBoardUrl })}
-        onInviteEmailChange={(inviteEmail) => setForm({ ...form, inviteEmail })}
         onSyncChange={(syncToGoogle) => setForm({ ...form, syncToGoogle })}
         onColorChange={(googleColorId) => setForm({ ...form, googleColorId })}
+      />
+      <CalendarExtrasFields
+        lessonLinks={form.lessonLinks ?? []}
+        googleExtraReminderMinutes={form.googleExtraReminderMinutes ?? null}
+        syncToGoogle={Boolean(form.syncToGoogle)}
+        googleConnected={googleConnected}
+        onLessonLinksChange={setLessonLinks}
+        onReminderChange={(googleExtraReminderMinutes) => setForm({ ...form, googleExtraReminderMinutes })}
       />
       <TextArea label="Lesson notes" value={form.lessonNotes ?? ''} onChange={(value) => setForm({ ...form, lessonNotes: value })} />
       <TextArea label="Homework" value={form.homework ?? ''} onChange={(value) => setForm({ ...form, homework: value })} />
@@ -43,34 +53,43 @@ export function SingleLessonFields({ form, setForm, students, googleConnected }:
 }
 
 export function RecurringFields({ form, setForm, students, googleConnected }: { form: RecurringLessonPayload; setForm: (form: RecurringLessonPayload) => void; students: Student[]; googleConnected: boolean }) {
+  const setLessonLinks = (lessonLinks: LessonLink[]) => setForm({ ...form, lessonLinks, miroBoardUrl: boardUrlFromLinks(lessonLinks) });
   return (
     <>
-      <StudentSelect value={form.studentId} onChange={(student) => setForm({
-        ...form,
-        studentId: student?.id ?? '',
-        title: student ? lessonTitle(student) : '',
-        hourlyRate: student?.hourlyRate ?? 0,
-        inviteEmail: student?.parentEmail ?? '',
-      })} students={students} />
-      <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
-      <FormInput label="First lesson date and time *" type="datetime-local" value={form.firstLessonDate} onChange={(value) => setForm({ ...form, firstLessonDate: value })} required />
-      <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
-      <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
-      <FormInput label="Repeat every weeks" type="number" value={String(form.intervalCount ?? '')} onChange={(value) => setForm({ ...form, intervalCount: value ? Number(value) : undefined })} />
-      <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
+      <FormRow columns={2}>
+        <StudentSelect value={form.studentId} onChange={(student) => setForm({
+          ...form,
+          studentId: student?.id ?? '',
+          title: student ? lessonTitle(student) : '',
+          hourlyRate: student?.hourlyRate ?? 0,
+          inviteEmail: student?.parentEmail ?? '',
+        })} students={students} />
+        <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
+      </FormRow>
+      <FormRow columns={3}>
+        <FormInput label="First lesson date and time *" type="datetime-local" value={form.firstLessonDate} onChange={(value) => setForm({ ...form, firstLessonDate: value })} required />
+        <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
+        <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
+      </FormRow>
+      <FormRow columns={3}>
+        <FormInput label="Repeat every weeks" type="number" value={String(form.intervalCount ?? '')} onChange={(value) => setForm({ ...form, intervalCount: value ? Number(value) : undefined })} />
         <FormInput label="Repeat until" type="datetime-local" value={form.recurrenceUntil ?? ''} onChange={(value) => setForm({ ...form, recurrenceUntil: value || undefined })} />
-        <GoogleNotifications value={form.googleExtraReminderMinutes ?? null} disabled={!googleConnected || !form.syncToGoogle} onChange={(googleExtraReminderMinutes) => setForm({ ...form, googleExtraReminderMinutes })} />
-      </div>
-      <CalendarSyncFields
-        boardLink={form.miroBoardUrl ?? ''}
-        inviteEmail={form.inviteEmail ?? ''}
+        <FormInput label="Invite email" type="email" value={form.inviteEmail ?? ''} onChange={(inviteEmail) => setForm({ ...form, inviteEmail })} />
+      </FormRow>
+      <GoogleCalendarOptions
         googleColorId={form.googleColorId ?? ''}
         syncToGoogle={Boolean(form.syncToGoogle)}
         googleConnected={googleConnected}
-        onBoardLinkChange={(miroBoardUrl) => setForm({ ...form, miroBoardUrl })}
-        onInviteEmailChange={(inviteEmail) => setForm({ ...form, inviteEmail })}
         onSyncChange={(syncToGoogle) => setForm({ ...form, syncToGoogle })}
         onColorChange={(googleColorId) => setForm({ ...form, googleColorId })}
+      />
+      <CalendarExtrasFields
+        lessonLinks={form.lessonLinks ?? []}
+        googleExtraReminderMinutes={form.googleExtraReminderMinutes ?? null}
+        syncToGoogle={Boolean(form.syncToGoogle)}
+        googleConnected={googleConnected}
+        onLessonLinksChange={setLessonLinks}
+        onReminderChange={(googleExtraReminderMinutes) => setForm({ ...form, googleExtraReminderMinutes })}
       />
       <TextArea label="Lesson notes" value={form.lessonNotes ?? ''} onChange={(value) => setForm({ ...form, lessonNotes: value })} />
       <TextArea label="Homework" value={form.homework ?? ''} onChange={(value) => setForm({ ...form, homework: value })} />
@@ -94,6 +113,22 @@ function StudentSelect({ value, onChange, students }: { value: string; onChange:
         {students.map((student) => <MenuItem key={student.id} value={student.id}>{student.name}</MenuItem>)}
       </Select>
     </FormControl>
+  );
+}
+
+function FormRow({ children, columns }: { children: ReactNode; columns: 2 | 3 }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridColumn: { md: 'span 2' },
+        gridTemplateColumns: { xs: '1fr', md: `repeat(${columns}, minmax(0, 1fr))` },
+        gap: 2,
+        alignItems: 'start',
+      }}
+    >
+      {children}
+    </Box>
   );
 }
 
@@ -121,38 +156,115 @@ function SyncToggle({ checked, disabled, onChange }: { checked: boolean; disable
   );
 }
 
-function CalendarSyncFields({
-  boardLink,
-  inviteEmail,
+function LessonLinksEditor({ value, onChange }: { value: LessonLink[]; onChange: (links: LessonLink[]) => void }) {
+  const links = value.length ? value : [];
+  const updateLink = (index: number, patch: Partial<LessonLink>) => {
+    onChange(links.map((link, linkIndex) => linkIndex === index ? { ...link, ...patch } : link));
+  };
+  const addLink = () => onChange([...links, { label: links.length === 0 ? 'Board' : '', url: '' }]);
+  const removeLink = (index: number) => onChange(links.filter((_, linkIndex) => linkIndex !== index));
+
+  return (
+    <Box>
+      <Typography variant="body2" sx={{ mb: 0.75, fontWeight: 500 }}>Lesson links</Typography>
+      <Paper variant="outlined" sx={{ p: 1, minHeight: 54 }}>
+        <Stack spacing={1}>
+          {links.map((link, index) => (
+            <Box key={index} sx={{ display: 'grid', gap: 1, gridTemplateColumns: { xs: '1fr', sm: '110px minmax(0, 1fr) 40px' } }}>
+              <TextField
+                size="small"
+                label="Name"
+                value={link.label}
+                placeholder="Board"
+                onChange={(event) => updateLink(index, { label: event.target.value })}
+              />
+              <TextField
+                size="small"
+                label="URL"
+                type="url"
+                value={link.url}
+                placeholder="https://..."
+                onChange={(event) => updateLink(index, { url: event.target.value })}
+              />
+              <IconButton type="button" onClick={() => removeLink(index)} aria-label="Remove link" title="Remove link">
+                <Icon name="x" className="h-4 w-4" />
+              </IconButton>
+            </Box>
+          ))}
+          <Button type="button" color="inherit" onClick={addLink} startIcon={<Icon name="plus" className="h-4 w-4" />} sx={{ minHeight: 36, alignSelf: 'flex-start', textTransform: 'none' }}>
+            Add link
+          </Button>
+        </Stack>
+      </Paper>
+    </Box>
+  );
+}
+
+function boardUrlFromLinks(links: LessonLink[]) {
+  const board = links.find((link) => link.label.trim().toLowerCase() === 'board' && link.url.trim());
+  const first = links.find((link) => link.url.trim());
+  return (board ?? first)?.url.trim() ?? '';
+}
+
+function CalendarExtrasFields({
+  lessonLinks,
+  googleExtraReminderMinutes,
+  syncToGoogle,
+  googleConnected,
+  onLessonLinksChange,
+  onReminderChange,
+}: {
+  lessonLinks: LessonLink[];
+  googleExtraReminderMinutes: number | null;
+  syncToGoogle: boolean;
+  googleConnected: boolean;
+  onLessonLinksChange: (links: LessonLink[]) => void;
+  onReminderChange: (value: number | null) => void;
+}) {
+  const googleDisabled = !googleConnected || !syncToGoogle;
+
+  return (
+    <Box sx={{ display: 'grid', gridColumn: { md: 'span 2' }, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 2, alignItems: 'start' }}>
+      <LessonLinksEditor value={lessonLinks} onChange={onLessonLinksChange} />
+      <GoogleNotifications value={googleExtraReminderMinutes} disabled={googleDisabled} onChange={onReminderChange} />
+    </Box>
+  );
+}
+
+function GoogleCalendarOptions({
   googleColorId,
   syncToGoogle,
   googleConnected,
-  onBoardLinkChange,
-  onInviteEmailChange,
   onSyncChange,
   onColorChange,
 }: {
-  boardLink: string;
-  inviteEmail: string;
   googleColorId: string;
   syncToGoogle: boolean;
   googleConnected: boolean;
-  onBoardLinkChange: (value: string) => void;
-  onInviteEmailChange: (value: string) => void;
   onSyncChange: (value: boolean) => void;
   onColorChange: (value: string) => void;
 }) {
+  const googleDisabled = !googleConnected || !syncToGoogle;
   return (
-    <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
-      <FormInput label="Board link" type="url" value={boardLink} onChange={onBoardLinkChange} />
-      <FormInput label="Invite email" type="email" value={inviteEmail} onChange={onInviteEmailChange} />
-      <div className="md:max-w-[240px]">
-        <GoogleColorSelect value={googleColorId} disabled={!googleConnected || !syncToGoogle} onChange={onColorChange} />
-      </div>
-      <div className="flex items-end">
+    <Box
+      sx={{
+        display: 'grid',
+        gridColumn: { md: 'span 2' },
+        gridTemplateColumns: { xs: '1fr', md: 'minmax(240px, 280px) minmax(0, 1fr)' },
+        gap: { xs: 1.5, md: 2 },
+        alignItems: 'center',
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1.5,
+        p: 1.5,
+        bgcolor: '#fafafa',
+      }}
+    >
+      <GoogleColorSelect value={googleColorId} disabled={googleDisabled} onChange={onColorChange} />
+      <Box sx={{ pt: { md: 2.75 } }}>
         <SyncToggle checked={syncToGoogle} disabled={!googleConnected} onChange={onSyncChange} />
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 

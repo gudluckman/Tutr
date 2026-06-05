@@ -31,6 +31,7 @@ public class TutorProfile extends BaseEntity {
     private String headline;
     private String bio;
     private String location;
+    private String tutorYear;
     private boolean isOnline;
     private BigDecimal hourlyRateMin;
     private BigDecimal hourlyRateMax;
@@ -40,4 +41,3 @@ public class TutorProfile extends BaseEntity {
     private String profileImageUrl;
     private boolean isPublic;
 }
-
