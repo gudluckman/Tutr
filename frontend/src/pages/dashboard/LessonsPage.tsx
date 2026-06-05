@@ -896,7 +896,7 @@ function CalendarLessonCard({
         </div>
       </div>
       {lesson.lessonSeriesId && <span className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Recurring</span>}
-      <div className="mt-2 grid gap-1.5 border-t border-border pt-2 min-[420px]:grid-cols-2 xl:grid-cols-1">
+      <div className="mt-2 space-y-1.5 border-t border-border pt-2">
         <QuickStatusSelect
           label="Lesson"
           ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
@@ -948,7 +948,7 @@ function CalendarStatusSelect({ ariaLabel, value, options, tone, disabled, onCha
 
 function QuickStatusSelect({ label, ariaLabel, value, options, tone, disabled, onChange }: { label: string; ariaLabel: string; value: string; options: string[]; tone: string; disabled: boolean; onChange: (value: string) => void }) {
   return (
-    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 0.5, minWidth: 0 }}>
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 1, justifyContent: 'space-between', minWidth: 0 }}>
       <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, fontSize: 9, fontWeight: 600, letterSpacing: 0, textTransform: 'uppercase' }}>{label}</Typography>
       <Select
         aria-label={ariaLabel}
@@ -956,7 +956,7 @@ function QuickStatusSelect({ label, ariaLabel, value, options, tone, disabled, o
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         displayEmpty
-        sx={statusSelectSx(tone, 10, 78)}
+        sx={statusSelectSx(tone, 10, 96)}
         className={tone}
       >
         {options.map((option) => <MenuItem key={option} value={option}>{statusLabel(option)}</MenuItem>)}
@@ -996,7 +996,8 @@ const segmentedControlSx = {
 function statusSelectSx(tone: string, fontSize: number, minWidth: number) {
   const palette = statusTonePalette(tone);
   return {
-    minWidth,
+    minWidth: minWidth || undefined,
+    maxWidth: '100%',
     borderRadius: 1.5,
     bgcolor: palette.bg,
     color: palette.color,
