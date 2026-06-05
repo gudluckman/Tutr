@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { Box, Button, Checkbox, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
+import type { ChangeEvent, ReactNode } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { assetUrl } from '../../api/client';
 import { getTutorProfile, updateTutorProfile, uploadTutorProfileImage } from '../../api/tutorApi';
 import { Avatar } from '../../components/ui/Avatar';
@@ -42,106 +44,133 @@ export function ProfileSettingsPage() {
   }
 
   if (profile.isError) return <ErrorAlert className="m-4 sm:m-8" error={profile.error} fallback="Could not load your profile. Please refresh the page." />;
-  if (!form) return <div className="p-4 text-muted-foreground sm:p-8">Loading profile...</div>;
+  if (!form) {
+    return (
+      <Box sx={{ p: { xs: 2, sm: 4 }, color: 'text.secondary' }}>
+        <Typography variant="body2">Loading profile...</Typography>
+      </Box>
+    );
+  }
 
   const imageUrl = assetUrl(form.profileImageUrl);
 
   return (
-    <div className="max-w-4xl p-4 sm:p-8">
-      <h1 className="mb-2 text-2xl font-semibold text-foreground sm:text-3xl">Profile settings</h1>
-      <p className="mb-8 text-muted-foreground">Manage your public tutor profile and make it discoverable to parents and students.</p>
+    <Box sx={{ maxWidth: 896, p: { xs: 2, sm: 4 } }}>
+      <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>Profile settings</Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+        Manage your public tutor profile and make it discoverable to parents and students.
+      </Typography>
 
-      <form onSubmit={submit} className="space-y-6">
-        <section className="rounded-lg border border-border bg-card p-4 sm:p-6">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">Profile image</h2>
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+      <Box component="form" onSubmit={submit} sx={{ display: 'grid', gap: 3 }}>
+        <SettingsPanel title="Profile image">
+          <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, gap: 3 }}>
             <Avatar
               name={form.displayName}
               src={imageUrl}
               className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-2xl font-semibold"
             />
-            <div>
-              <label className="button-secondary cursor-pointer gap-2">
-                <Icon name="upload" className="h-4 w-4" />
+            <Box>
+              <Button component="label" variant="outlined" startIcon={<Icon name="upload" className="h-4 w-4" />} disabled={imageUpload.isPending}>
                 Upload image
-                <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={uploadImage} disabled={imageUpload.isPending} />
-              </label>
-              <p className="mt-2 text-xs text-muted-foreground">Recommended: square image, at least 400x400px.</p>
+                <Box component="input" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={uploadImage} />
+              </Button>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                Recommended: square image, at least 400x400px.
+              </Typography>
               {imageUpload.isError && (
                 <ErrorAlert className="mt-2" error={imageUpload.error} fallback="Upload failed. Please try again." />
               )}
-            </div>
-          </div>
-        </section>
+            </Box>
+          </Stack>
+        </SettingsPanel>
 
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6">
-          <h2 className="text-lg font-semibold text-foreground">Basic information</h2>
-          <FormInput label="Display name *" value={form.displayName} onChange={(value) => setForm({ ...form, displayName: value })} required />
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-foreground">Profile URL slug *</span>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <span className="text-sm text-muted-foreground">/tutors/</span>
-              <input className="input flex-1" value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} required />
-            </div>
-          </label>
-          <FormInput label="Headline" value={form.headline ?? ''} placeholder="e.g. VCE Maths specialist | ATAR 99.5" onChange={(value) => setForm({ ...form, headline: value })} />
-          <FormInput label="Location" value={form.location ?? ''} placeholder="e.g. Sydney, NSW" onChange={(value) => setForm({ ...form, location: value })} />
-          <div className="grid gap-4 md:grid-cols-2">
-            <FormInput label="Min hourly rate (AUD)" type="number" value={String(form.hourlyRateMin ?? 0)} onChange={(value) => setForm({ ...form, hourlyRateMin: Number(value) })} />
-            <FormInput label="Max hourly rate (AUD)" type="number" value={String(form.hourlyRateMax ?? 0)} onChange={(value) => setForm({ ...form, hourlyRateMax: Number(value) })} />
-          </div>
-        </section>
+        <SettingsPanel title="Basic information">
+          <Stack sx={{ gap: 2 }}>
+            <ProfileTextField label="Display name" value={form.displayName} onChange={(value) => setForm({ ...form, displayName: value })} required />
+            <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, gap: 1.5 }}>
+              <TextField label="Profile URL slug" value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} required fullWidth />
+            </Stack>
+            <ProfileTextField label="Headline" value={form.headline ?? ''} placeholder="e.g. VCE Maths specialist | ATAR 99.5" onChange={(value) => setForm({ ...form, headline: value })} />
+            <ProfileTextField label="Location" value={form.location ?? ''} placeholder="e.g. Sydney, NSW" onChange={(value) => setForm({ ...form, location: value })} />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
+              <ProfileTextField label="Min hourly rate (AUD)" type="number" value={String(form.hourlyRateMin ?? 0)} onChange={(value) => setForm({ ...form, hourlyRateMin: Number(value) })} />
+              <ProfileTextField label="Max hourly rate (AUD)" type="number" value={String(form.hourlyRateMax ?? 0)} onChange={(value) => setForm({ ...form, hourlyRateMax: Number(value) })} />
+            </Box>
+          </Stack>
+        </SettingsPanel>
 
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6">
-          <h2 className="text-lg font-semibold text-foreground">Education</h2>
-          <FormInput label="University" value={form.university ?? ''} onChange={(value) => setForm({ ...form, university: value })} />
-          <FormInput label="Degree" value={form.degree ?? ''} onChange={(value) => setForm({ ...form, degree: value })} />
-          <FormInput label="ATAR" value={form.atar ?? ''} placeholder="e.g. 99.5" onChange={(value) => setForm({ ...form, atar: value })} />
-        </section>
+        <SettingsPanel title="Education">
+          <Stack sx={{ gap: 2 }}>
+            <ProfileTextField label="University" value={form.university ?? ''} onChange={(value) => setForm({ ...form, university: value })} />
+            <ProfileTextField label="Degree" value={form.degree ?? ''} onChange={(value) => setForm({ ...form, degree: value })} />
+            <ProfileTextField label="ATAR" value={form.atar ?? ''} placeholder="e.g. 99.5" onChange={(value) => setForm({ ...form, atar: value })} />
+          </Stack>
+        </SettingsPanel>
 
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6">
-          <h2 className="text-lg font-semibold text-foreground">Settings</h2>
-          <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" checked={form.online} onChange={(event) => setForm({ ...form, online: event.target.checked })} className="h-4 w-4 rounded border-input text-neutral-700 focus:ring-2 focus:ring-neutral-200" />
-            <span className="text-sm text-foreground">Offers online lessons</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" checked={form.isPublic} onChange={(event) => setForm({ ...form, isPublic: event.target.checked })} className="h-4 w-4 rounded border-input text-neutral-700 focus:ring-2 focus:ring-neutral-200" />
-            <span className="flex items-center gap-2 text-sm text-foreground">
-              <Icon name="globe" className="h-4 w-4" />
-              Make profile public and searchable
-            </span>
-          </label>
-        </section>
+        <SettingsPanel title="Settings">
+          <Stack sx={{ gap: 1 }}>
+            <FormControlLabel
+              control={<Checkbox checked={form.online} onChange={(event) => setForm({ ...form, online: event.target.checked })} />}
+              label="Offers online lessons"
+            />
+            <FormControlLabel
+              control={<Checkbox checked={form.isPublic} onChange={(event) => setForm({ ...form, isPublic: event.target.checked })} />}
+              label={(
+                <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+                  <Icon name="globe" className="h-4 w-4" />
+                  <span>Make profile public and searchable</span>
+                </Stack>
+              )}
+            />
+          </Stack>
+        </SettingsPanel>
 
-        <section className="rounded-lg border border-border bg-card p-4 sm:p-6">
-          <h2 className="mb-4 text-lg font-semibold text-foreground">About you</h2>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-foreground">Bio</span>
-            <textarea className="input min-h-40 resize-none" value={form.bio ?? ''} placeholder="Tell parents and students about your teaching approach, experience, and what makes you a great tutor..." onChange={(event) => setForm({ ...form, bio: event.target.value })} />
-          </label>
-        </section>
+        <SettingsPanel title="About you">
+          <TextField
+            label="Bio"
+            multiline
+            minRows={6}
+            fullWidth
+            value={form.bio ?? ''}
+            placeholder="Tell parents and students about your teaching approach, experience, and what makes you a great tutor..."
+            onChange={(event) => setForm({ ...form, bio: event.target.value })}
+          />
+        </SettingsPanel>
 
-        <div className="flex flex-wrap items-center gap-4">
-          <button className="button px-6 py-2.5" disabled={save.isPending}>Save profile</button>
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, gap: 2 }}>
+          <Button variant="contained" type="submit" disabled={save.isPending}>Save profile</Button>
           {save.isSuccess && (
-            <div className="flex items-center gap-2 text-primary">
+            <Stack direction="row" sx={{ alignItems: 'center', gap: 1, color: 'primary.main' }}>
               <Icon name="check" className="h-5 w-5" />
-              <span className="text-sm">Profile saved successfully.</span>
-            </div>
+              <Typography variant="body2">Profile saved successfully.</Typography>
+            </Stack>
           )}
-        </div>
+        </Stack>
         <ErrorAlert error={save.error} fallback="Could not save your profile. Please try again." />
-      </form>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
-function FormInput({ label, value, onChange, type = 'text', placeholder, required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string; required?: boolean }) {
+function SettingsPanel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-foreground">{label}</span>
-      <input className="input" type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} required={required} />
-    </label>
+    <Paper component="section" variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 2 }}>
+      <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>{title}</Typography>
+      {children}
+    </Paper>
+  );
+}
+
+function ProfileTextField({ label, value, onChange, type = 'text', placeholder, required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string; required?: boolean }) {
+  return (
+    <TextField
+      label={label}
+      type={type}
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange(event.target.value)}
+      required={required}
+      slotProps={type === 'number' ? { htmlInput: { min: 0, step: 1 } } : undefined}
+    />
   );
 }

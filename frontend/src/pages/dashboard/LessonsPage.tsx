@@ -1,4 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Box,
+  Button,
+  ButtonBase,
+  Dialog,
+  DialogContent,
+  FormControl,
+  IconButton,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getGoogleCalendarAuthUrl, getGoogleCalendarStatus, syncGoogleCalendarDeletions } from '../../api/calendarApi';
@@ -8,67 +24,28 @@ import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { Lesson, LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../types/lesson';
 import type { Student } from '../../types/student';
-
-type FormMode = 'single' | 'recurring';
-type CalendarView = 'DAILY' | 'WEEKLY' | 'MONTHLY';
-type LessonsWorkspaceView = 'CALENDAR' | 'TABLE';
-type LessonDeleteScope = 'SINGLE' | 'FOLLOWING' | 'SERIES';
-
-const googleDeletionSyncStorageKey = 'tutr.googleDeletionSyncAt';
-const lessonAmountNumber = new Intl.NumberFormat('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const googleCalendarColors = [
-  { id: '', label: 'Default', swatch: '#16a34a' },
-  { id: '1', label: 'Lavender', swatch: '#7986cb' },
-  { id: '2', label: 'Sage', swatch: '#33b679' },
-  { id: '3', label: 'Grape', swatch: '#8e24aa' },
-  { id: '4', label: 'Flamingo', swatch: '#e67c73' },
-  { id: '5', label: 'Banana', swatch: '#f6c026' },
-  { id: '6', label: 'Tangerine', swatch: '#f5511d' },
-  { id: '7', label: 'Peacock', swatch: '#039be5' },
-  { id: '8', label: 'Graphite', swatch: '#616161' },
-  { id: '9', label: 'Blueberry', swatch: '#3f51b5' },
-  { id: '10', label: 'Basil', swatch: '#0b8043' },
-  { id: '11', label: 'Tomato', swatch: '#d50000' },
-];
-const googleReminderOptions = [
-  { unit: 'minutes', multiplier: 1, min: 1, max: 59 },
-  { unit: 'hours', multiplier: 60, min: 1, max: 23 },
-  { unit: 'days', multiplier: 1440, min: 1, max: 28 },
-];
-
-const emptyLesson: LessonPayload = {
-  studentId: '',
-  title: '',
-  lessonDate: toDateTimeLocal(new Date()),
-  durationMinutes: 60,
-  hourlyRate: 0,
-  status: 'SCHEDULED',
-  paymentStatus: 'UNPAID',
-  lessonNotes: '',
-  homework: '',
-  miroBoardUrl: '',
-  inviteEmail: '',
-  googleColorId: '',
-  googleExtraReminderMinutes: null,
-  syncToGoogle: true,
-};
-
-const emptyRecurring: RecurringLessonPayload = {
-  studentId: '',
-  title: '',
-  firstLessonDate: toDateTimeLocal(new Date()),
-  durationMinutes: 60,
-  hourlyRate: 0,
-  frequency: 'WEEKLY',
-  intervalCount: 1,
-  lessonNotes: '',
-  homework: '',
-  miroBoardUrl: '',
-  inviteEmail: '',
-  googleColorId: '',
-  googleExtraReminderMinutes: null,
-  syncToGoogle: true,
-};
+import { emptyLesson, emptyRecurring, googleDeletionSyncStorageKey, lessonStatusStyles, paymentStatusStyles } from './lessons/constants';
+import { DeleteLessonDialog } from './lessons/DeleteLessonDialog';
+import { GoogleCalendarPanel } from './lessons/GoogleCalendarPanel';
+import { RecurringFields, SingleLessonFields } from './lessons/LessonFormFields';
+import { LessonTable } from './lessons/LessonTable';
+import type { CalendarView, FormMode, LessonDeleteScope, LessonsWorkspaceView } from './lessons/types';
+import {
+  addDays,
+  calendarPaymentPalette,
+  calendarRangeLabel,
+  calendarViewDate,
+  isSameDay,
+  lessonAmount,
+  lessonTimeRange,
+  lessonTitle,
+  startOfDay,
+  startOfMonthGrid,
+  startOfWeek,
+  statusLabel,
+  timeLabel,
+  toDateTimeLocal,
+} from './lessons/lessonUtils';
 
 export function LessonsPage() {
   const queryClient = useQueryClient();
@@ -216,28 +193,35 @@ export function LessonsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 sm:mb-8">
-        <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Lessons</h1>
-        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
-          <div className="grid flex-1 grid-cols-2 rounded-lg bg-muted p-1 sm:inline-flex sm:flex-none">
+    <Box sx={{ p: { xs: 2, sm: 4 } }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2, mb: { xs: 3, sm: 4 } }}
+      >
+        <Typography variant="h4" sx={{ fontWeight: 600 }}>Lessons</Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, gap: 1.5 }}>
+          <ToggleButtonGroup
+            exclusive
+            value={workspaceView}
+            size="small"
+            onChange={(_, value: LessonsWorkspaceView | null) => value && setWorkspaceView(value)}
+            aria-label="Lesson workspace view"
+            fullWidth
+          >
             {(['CALENDAR', 'TABLE'] as LessonsWorkspaceView[]).map((option) => (
-              <button
-                key={option}
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${workspaceView === option ? 'bg-card font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                type="button"
-                onClick={() => setWorkspaceView(option)}
-              >
-                {statusLabel(option)}
-              </button>
+              <ToggleButton key={option} value={option}>{statusLabel(option)}</ToggleButton>
             ))}
-          </div>
-          <button className="button gap-2" onClick={() => setShowForm(true)}>
-            <Icon name="plus" className="h-4 w-4" />
+          </ToggleButtonGroup>
+          <Button
+            variant="contained"
+            startIcon={<Icon name="plus" className="h-4 w-4" />}
+            onClick={() => setShowForm(true)}
+            sx={{ minWidth: 112, whiteSpace: 'nowrap', fontSize: 12, px: 1.75 }}
+          >
             Add lesson
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Stack>
+      </Stack>
 
       <GoogleCalendarPanel
         configured={Boolean(googleStatus.data?.configured)}
@@ -258,7 +242,7 @@ export function LessonsPage() {
       <ErrorAlert className="mb-6" error={updateStatuses.error} fallback="Could not update the lesson status. Please try again." />
 
       {deletingLesson && (
-        <DeleteLessonModal
+        <DeleteLessonDialog
           lesson={deletingLesson}
           isDeleting={remove.isPending}
           onClose={() => setDeletingLesson(null)}
@@ -267,29 +251,36 @@ export function LessonsPage() {
       )}
 
       {calendarError && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <Paper variant="outlined" sx={{ mb: 3, borderColor: 'error.light', bgcolor: 'error.50', p: 2, color: 'error.dark', fontSize: 14 }}>
           {calendarError === 'oauth'
             ? 'Google did not grant Calendar access. Make sure you choose your listed test account, press Continue on the unverified-app screen, and allow the Calendar permission.'
             : 'Google Calendar could not finish connecting. Check that the OAuth client secret and redirect URI match your Google Cloud settings.'}
-        </div>
+        </Paper>
       )}
 
       {showForm && (
-        <div className="mb-6 rounded-lg border border-border bg-card p-4 sm:p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-semibold text-foreground">{editing ? 'Edit lesson' : mode === 'recurring' ? 'Add recurring lessons' : 'Add lesson'}</h2>
+        <Paper variant="outlined" sx={{ mb: 3, p: { xs: 2, sm: 3 }, borderRadius: 2 }}>
+          <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2 }}>
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>{editing ? 'Edit lesson' : mode === 'recurring' ? 'Add recurring lessons' : 'Add lesson'}</Typography>
               {!editing && (
-                <div className="mt-3 inline-flex rounded-lg border border-border bg-muted p-1">
-                  <button type="button" onClick={() => setMode('single')} className={`rounded-md px-3 py-1.5 text-sm ${mode === 'single' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}>Single</button>
-                  <button type="button" onClick={() => setMode('recurring')} className={`rounded-md px-3 py-1.5 text-sm ${mode === 'recurring' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}>Recurring</button>
-                </div>
+                <ToggleButtonGroup
+                  exclusive
+                  value={mode}
+                  size="small"
+                  onChange={(_, value: FormMode | null) => value && setMode(value)}
+                  aria-label="Lesson form mode"
+                  sx={{ mt: 1.5 }}
+                >
+                  <ToggleButton value="single">Single</ToggleButton>
+                  <ToggleButton value="recurring">Recurring</ToggleButton>
+                </ToggleButtonGroup>
               )}
-            </div>
-            <button className="icon-button" onClick={resetForm} type="button" aria-label="Close form">
+            </Box>
+            <IconButton onClick={resetForm} type="button" aria-label="Close form">
               <Icon name="x" className="h-5 w-5" />
-            </button>
-          </div>
+            </IconButton>
+          </Stack>
 
           <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
             <ErrorAlert className="md:col-span-2" error={mode === 'recurring' && !editing ? saveRecurring.error : save.error} fallback="Could not save the lesson. Please check the details and try again." />
@@ -298,14 +289,14 @@ export function LessonsPage() {
             ) : (
               <SingleLessonFields form={form} setForm={setForm} students={students.data ?? []} googleConnected={Boolean(googleStatus.data?.connected)} />
             )}
-            <div className="flex flex-wrap gap-3 md:col-span-2">
-              <button className="button" disabled={save.isPending || saveRecurring.isPending}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 1.5 }} className="md:col-span-2">
+              <Button variant="contained" type="submit" disabled={save.isPending || saveRecurring.isPending}>
                 {editing ? 'Update lesson' : mode === 'recurring' ? 'Create recurring lessons' : 'Add lesson'}
-              </button>
-              <button className="button-secondary" type="button" onClick={resetForm}>Cancel</button>
-            </div>
+              </Button>
+              <Button variant="outlined" type="button" onClick={resetForm}>Cancel</Button>
+            </Stack>
           </form>
-        </div>
+        </Paper>
       )}
 
       {workspaceView === 'CALENDAR' ? (
@@ -329,7 +320,7 @@ export function LessonsPage() {
           onDelete={removeLesson}
         />
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -362,29 +353,35 @@ function LessonCalendar({
   const move = (direction: number) => onDateChange(calendarViewDate(date, view, direction));
 
   return (
-    <section className="mb-8 overflow-hidden rounded-lg border border-border bg-card">
-      <div className="flex flex-col items-stretch justify-between gap-4 border-b border-border p-4 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="flex flex-wrap items-center gap-3">
-          <button className="button-secondary" type="button" onClick={() => onDateChange(startOfDay(new Date()))}>Today</button>
-          <div className="inline-flex overflow-hidden rounded-lg border border-border">
-            <button className="px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" type="button" onClick={() => move(-1)} aria-label={`Previous ${view.toLowerCase()}`}>‹</button>
-            <button className="border-l border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" type="button" onClick={() => move(1)} aria-label={`Next ${view.toLowerCase()}`}>›</button>
-          </div>
-          <h2 className="text-lg font-semibold text-foreground">{calendarRangeLabel(date, view)}</h2>
-        </div>
-        <div className="grid grid-cols-3 rounded-lg border border-border bg-muted p-1 sm:inline-flex">
+    <Paper component="section" variant="outlined" sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2, borderBottom: 1, borderColor: 'divider', p: 2 }}
+      >
+        <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+          <Button variant="outlined" size="small" type="button" onClick={() => onDateChange(startOfDay(new Date()))}>Today</Button>
+          <Stack direction="row" sx={{ alignItems: 'center' }}>
+            <IconButton size="small" type="button" onClick={() => move(-1)} aria-label={`Previous ${view.toLowerCase()}`}>
+              <span aria-hidden>‹</span>
+            </IconButton>
+            <IconButton size="small" type="button" onClick={() => move(1)} aria-label={`Next ${view.toLowerCase()}`}>
+              <span aria-hidden>›</span>
+            </IconButton>
+          </Stack>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>{calendarRangeLabel(date, view)}</Typography>
+        </Stack>
+        <ToggleButtonGroup
+          exclusive
+          value={view}
+          size="small"
+          onChange={(_, value: CalendarView | null) => value && onViewChange(value)}
+          aria-label="Calendar view"
+        >
           {(['DAILY', 'WEEKLY', 'MONTHLY'] as CalendarView[]).map((option) => (
-            <button
-              key={option}
-              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${view === option ? 'bg-card font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              type="button"
-              onClick={() => onViewChange(option)}
-            >
-              {statusLabel(option)}
-            </button>
+            <ToggleButton key={option} value={option}>{statusLabel(option)}</ToggleButton>
           ))}
-        </div>
-      </div>
+        </ToggleButtonGroup>
+      </Stack>
 
       {view === 'DAILY' && (
         <DailyCalendar
@@ -420,7 +417,7 @@ function LessonCalendar({
           onUpdatePaymentStatus={onUpdatePaymentStatus}
         />
       )}
-    </section>
+    </Paper>
   );
 }
 
@@ -518,19 +515,19 @@ function DailyLessonCard({
           </p>
         </div>
         <div className="flex gap-1 self-end sm:self-auto">
-          <button className="icon-button" type="button" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`}>
+          <IconButton size="small" type="button" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`}>
             <Icon name="edit" className="h-4 w-4" />
-          </button>
-          <button className="icon-button hover:bg-destructive/10 hover:text-destructive" type="button" onClick={onDelete} aria-label={`Delete ${lesson.title || 'lesson'}`}>
+          </IconButton>
+          <IconButton size="small" color="error" type="button" onClick={onDelete} aria-label={`Delete ${lesson.title || 'lesson'}`}>
             <Icon name="trash" className="h-4 w-4" />
-          </button>
+          </IconButton>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-4 text-sm text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <Icon name="dollar" className="h-4 w-4" />
-          <strong className="text-foreground">${lesson.hourlyRate}/hr</strong>
-          <span>(${lessonAmount(lesson)} total)</span>
+          <strong className="text-foreground">{lesson.hourlyRate}/hr</strong>
+          <span>({lessonAmount(lesson)} total)</span>
         </span>
         {lesson.lessonNotes && <span className="inline-flex items-center gap-2"><Icon name="edit" className="h-4 w-4" />{lesson.lessonNotes}</span>}
         {lesson.homework && <span className="inline-flex items-center gap-2"><Icon name="book" className="h-4 w-4" />{lesson.homework}</span>}
@@ -631,9 +628,9 @@ function MonthlyCalendar({
                   <div className="space-y-1">
                     {dayLessons.slice(0, 3).map((lesson) => (
                       <div key={lesson.id} className="group relative">
-                        <button className={`block w-full truncate rounded px-2 py-1 text-left text-[11px] font-medium transition-colors ${calendarPaymentPalette(lesson).chip}`} type="button" onClick={() => setSelectedLessonId(lesson.id)}>
+                        <ButtonBase className={`block w-full truncate rounded px-2 py-1 text-left text-[11px] font-medium transition-colors ${calendarPaymentPalette(lesson).chip}`} onClick={() => setSelectedLessonId(lesson.id)}>
                           {timeLabel(lesson.lessonDate)} {lesson.studentName}
-                        </button>
+                        </ButtonBase>
                         <LessonHoverCard lesson={lesson} />
                       </div>
                     ))}
@@ -666,7 +663,7 @@ function LessonHoverCard({ lesson }: { lesson: Lesson }) {
       <p className="truncate text-sm font-semibold text-foreground">{lesson.title || 'Tutoring lesson'}</p>
       <p className="mt-1 text-xs text-muted-foreground">{lesson.studentName}</p>
       <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Icon name="clock" className="h-3.5 w-3.5" />{lessonTimeRange(lesson)}</p>
-      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><Icon name="dollar" className="h-3.5 w-3.5" />${lesson.hourlyRate}/hr (${lessonAmount(lesson)} total)</p>
+      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><Icon name="dollar" className="h-3.5 w-3.5" />{lesson.hourlyRate}/hr ({lessonAmount(lesson)} total)</p>
     </div>
   );
 }
@@ -689,22 +686,22 @@ function MonthlyLessonModal({
   onUpdatePaymentStatus: (status: PaymentStatus) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={`${lesson.title || 'Lesson'} details`} onMouseDown={onClose}>
-      <article className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-xl border border-border bg-card p-4 shadow-xl sm:rounded-lg sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">{lesson.title || 'Tutoring lesson'}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{lesson.studentName}</p>
-          </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close lesson details">
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-label={`${lesson.title || 'Lesson'} details`}>
+      <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+        <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>{lesson.title || 'Tutoring lesson'}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{lesson.studentName}</Typography>
+          </Box>
+          <IconButton type="button" onClick={onClose} aria-label="Close lesson details">
             <Icon name="x" className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="mt-4 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-          <p className="flex items-center gap-2"><Icon name="calendar" className="h-4 w-4" />{new Date(lesson.lessonDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-          <p className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{lessonTimeRange(lesson)}</p>
-          <p className="flex items-center gap-2"><Icon name="dollar" className="h-4 w-4" />${lesson.hourlyRate}/hr (${lessonAmount(lesson)} total)</p>
-          <div className="flex flex-wrap gap-2">
+          </IconButton>
+        </Stack>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5, mt: 2, color: 'text.secondary', fontSize: 14 }}>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}><Icon name="calendar" className="h-4 w-4" />{new Date(lesson.lessonDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</Stack>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}><Icon name="clock" className="h-4 w-4" />{lessonTimeRange(lesson)}</Stack>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}><Icon name="dollar" className="h-4 w-4" />{lesson.hourlyRate}/hr ({lessonAmount(lesson)} total)</Stack>
+          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
             <CalendarStatusSelect
               ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
               value={lesson.status}
@@ -721,133 +718,29 @@ function MonthlyLessonModal({
               disabled={isUpdating}
               onChange={(value) => onUpdatePaymentStatus(value as PaymentStatus)}
             />
-          </div>
-        </div>
-        {lesson.lessonNotes && <p className="mt-4 border-t border-border pt-4 text-sm text-muted-foreground">{lesson.lessonNotes}</p>}
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button className="button-secondary gap-2 text-destructive hover:bg-destructive/10" type="button" onClick={onDelete}><Icon name="trash" className="h-4 w-4" />Delete lesson</button>
-          <button className="button-secondary" type="button" onClick={onClose}>Close</button>
-          <button className="button gap-2" type="button" onClick={onEdit}><Icon name="edit" className="h-4 w-4" />Edit lesson</button>
-        </div>
-      </article>
-    </div>
-  );
-}
-
-function DeleteLessonModal({
-  lesson,
-  isDeleting,
-  onClose,
-  onConfirm,
-}: {
-  lesson: Lesson;
-  isDeleting: boolean;
-  onClose: () => void;
-  onConfirm: (scope: LessonDeleteScope) => void;
-}) {
-  const isRecurring = Boolean(lesson.lessonSeriesId);
-  const [scope, setScope] = useState<LessonDeleteScope>('SINGLE');
-  const options: Array<{ value: LessonDeleteScope; label: string }> = isRecurring
-    ? [
-        { value: 'SINGLE', label: 'This event' },
-        { value: 'FOLLOWING', label: 'This and following events' },
-        { value: 'SERIES', label: 'All events' },
-      ]
-    : [{ value: 'SINGLE', label: 'This lesson' }];
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Delete lesson" onMouseDown={isDeleting ? undefined : onClose}>
-      <article className="w-full max-w-md rounded-t-xl border border-border bg-card p-4 shadow-xl sm:rounded-lg sm:p-5" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">Delete lesson?</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{lesson.title || 'Tutoring lesson'} with {lesson.studentName}</p>
-          </div>
-          <button className="icon-button" type="button" onClick={onClose} disabled={isDeleting} aria-label="Close delete dialog">
-            <Icon name="x" className="h-4 w-4" />
-          </button>
-        </div>
-        <p className="mt-4 text-sm text-muted-foreground">
-          {isRecurring
-            ? 'Choose which recurring lessons to delete.'
-            : 'This lesson and its synced Google Calendar event will be removed.'}
-        </p>
-        <div className="mt-5 grid gap-3">
-          {options.map((option) => (
-            <label key={option.value} className="flex cursor-pointer items-center gap-3 text-sm text-foreground">
-              <input
-                className="h-5 w-5 accent-primary"
-                type="radio"
-                name="delete-scope"
-                value={option.value}
-                checked={scope === option.value}
-                disabled={isDeleting}
-                onChange={() => setScope(option.value)}
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
-        <div className="mt-6 flex justify-end gap-2">
-          <button className="button-secondary border-transparent bg-transparent text-primary hover:bg-accent" type="button" onClick={onClose} disabled={isDeleting}>Cancel</button>
-          <button className="button min-w-20 bg-primary hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60" type="button" onClick={() => onConfirm(scope)} disabled={isDeleting}>OK</button>
-        </div>
-      </article>
-    </div>
+          </Stack>
+        </Box>
+        {lesson.lessonNotes && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, borderTop: 1, borderColor: 'divider', pt: 2 }}>
+            {lesson.lessonNotes}
+          </Typography>
+        )}
+        <Stack direction={{ xs: 'column-reverse', sm: 'row' }} sx={{ justifyContent: 'flex-end', gap: 1, mt: 3 }}>
+          <Button variant="outlined" color="error" type="button" startIcon={<Icon name="trash" className="h-4 w-4" />} onClick={onDelete}>Delete lesson</Button>
+          <Button variant="outlined" type="button" onClick={onClose}>Close</Button>
+          <Button variant="contained" type="button" startIcon={<Icon name="edit" className="h-4 w-4" />} onClick={onEdit}>Edit lesson</Button>
+        </Stack>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function CalendarEmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-border p-10 text-center">
+    <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderStyle: 'dashed', borderRadius: 2 }}>
       <Icon name="calendar" className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-      <p className="text-sm text-muted-foreground">{message}</p>
-    </div>
-  );
-}
-
-function GoogleCalendarPanel({
-  configured,
-  connected,
-  email,
-  onConnect,
-  isConnecting,
-  onSyncDeletions,
-  isSyncingDeletions,
-}: {
-  configured: boolean;
-  connected: boolean;
-  email?: string | null;
-  onConnect: () => void;
-  isConnecting: boolean;
-  onSyncDeletions: () => void;
-  isSyncingDeletions: boolean;
-}) {
-  const stateStyles = connected
-    ? 'border-green-200 bg-green-50 text-green-900'
-    : configured
-      ? 'border-yellow-200 bg-yellow-50 text-yellow-900'
-      : 'border-red-200 bg-red-50 text-red-900';
-
-  return (
-    <section className={`mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border p-4 sm:p-5 ${stateStyles}`}>
-      <div>
-        <h2 className="font-semibold">Google Calendar</h2>
-        <p className="text-sm opacity-80">
-          {!configured ? 'Add Google OAuth env vars to enable calendar sync.' : connected ? `Connected${email ? ` as ${email}` : ''}.` : 'Connect Google Calendar to sync lessons when you create them.'}
-        </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {connected && (
-          <button className="rounded-md bg-white/80 px-4 py-2 text-sm font-medium text-green-900 ring-1 ring-green-200 disabled:opacity-60" onClick={onSyncDeletions} disabled={isSyncingDeletions}>
-            Sync deletions
-          </button>
-        )}
-        <button className={connected ? 'rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-80' : 'button-secondary'} onClick={onConnect} disabled={!configured || connected || isConnecting}>
-          {connected ? 'Connected' : 'Connect Google Calendar'}
-        </button>
-      </div>
-    </section>
+      <Typography variant="body2" color="text.secondary">{message}</Typography>
+    </Paper>
   );
 }
 
@@ -906,12 +799,12 @@ function CalendarLessonCard({
           )}
         </div>
         <div className="flex shrink-0">
-          <button className="rounded-md border border-transparent p-1 text-muted-foreground transition-colors hover:border-border hover:bg-white/80 hover:text-foreground" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`}>
+          <IconButton size="small" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`} sx={{ p: 0.5 }}>
             <Icon name="edit" className="h-3.5 w-3.5" />
-          </button>
-          <button className="rounded-md border border-transparent p-1 text-muted-foreground transition-colors hover:border-red-100 hover:bg-red-50 hover:text-destructive" onClick={onDelete} aria-label={`Delete ${lesson.title || 'lesson'}`}>
+          </IconButton>
+          <IconButton size="small" color="error" onClick={onDelete} aria-label={`Delete ${lesson.title || 'lesson'}`} sx={{ p: 0.5 }}>
             <Icon name="trash" className="h-3.5 w-3.5" />
-          </button>
+          </IconButton>
         </div>
       </div>
       {lesson.lessonSeriesId && <span className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Recurring</span>}
@@ -943,710 +836,84 @@ function WeeklyLessonRate({ lesson }: { lesson: Lesson }) {
   return (
     <p className="flex items-start gap-1 text-[10px] leading-tight text-muted-foreground">
       <Icon name="dollar" className="h-3 w-3 shrink-0" />
-      <span>${lesson.hourlyRate}/hr</span>
+      <span>{lesson.hourlyRate}/hr</span>
     </p>
   );
 }
 
-const lessonStatusStyles: Record<LessonStatus, string> = {
-  SCHEDULED: 'border-blue-200 bg-blue-50 text-blue-800',
-  COMPLETED: 'border-green-200 bg-green-50 text-green-800',
-  CANCELLED: 'border-gray-200 bg-gray-50 text-gray-700',
-  NO_SHOW: 'border-red-200 bg-red-50 text-red-800',
-};
-
-const paymentStatusStyles: Record<PaymentStatus, string> = {
-  PAID: 'border-green-200 bg-green-50 text-green-800',
-  UNPAID: 'border-red-200 bg-red-50 text-red-800',
-  PARTIAL: 'border-yellow-200 bg-yellow-50 text-yellow-800',
-};
-
-function calendarPaymentPalette(lesson: Lesson) {
-  if (lesson.paymentStatus === 'PAID' && lesson.status !== 'SCHEDULED') {
-    return {
-      rail: 'bg-green-500',
-      pill: 'bg-green-100/80 text-green-800',
-      chip: 'bg-green-100 text-green-800',
-    };
-  }
-  if (lesson.paymentStatus === 'PARTIAL') {
-    return {
-      rail: 'bg-yellow-400',
-      pill: 'bg-yellow-100 text-yellow-800',
-      chip: 'bg-yellow-100 text-yellow-800',
-    };
-  }
-  if (lesson.paymentStatus === 'UNPAID' && lessonEndTime(lesson).getTime() < Date.now()) {
-    return {
-      rail: 'bg-red-500',
-      pill: 'bg-red-100 text-red-800',
-      chip: 'bg-red-100 text-red-800',
-    };
-  }
-  return {
-    rail: 'bg-gray-400',
-    pill: 'bg-gray-100 text-gray-700',
-    chip: 'bg-gray-100 text-gray-700',
-  };
-}
-
 function CalendarStatusSelect({ ariaLabel, value, options, tone, disabled, onChange }: { ariaLabel: string; value: string; options: string[]; tone: string; disabled: boolean; onChange: (value: string) => void }) {
   return (
-    <select
-      aria-label={ariaLabel}
-      className={`rounded border px-2 py-1 text-xs font-medium outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-60 ${tone}`}
-      value={value}
-      disabled={disabled}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      {options.map((option) => <option key={option} value={option}>{statusLabel(option)}</option>)}
-    </select>
+    <FormControl size="small" disabled={disabled}>
+      <Select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        displayEmpty
+        sx={statusSelectSx(tone, 12, 120)}
+        className={tone}
+      >
+        {options.map((option) => <MenuItem key={option} value={option}>{statusLabel(option)}</MenuItem>)}
+      </Select>
+    </FormControl>
   );
 }
 
 function QuickStatusSelect({ label, ariaLabel, value, options, tone, disabled, onChange }: { label: string; ariaLabel: string; value: string; options: string[]; tone: string; disabled: boolean; onChange: (value: string) => void }) {
   return (
-    <label className="flex items-center justify-between gap-1.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      <select
+    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, fontWeight: 500, textTransform: 'uppercase' }}>{label}</Typography>
+      <Select
         aria-label={ariaLabel}
-        className={`min-w-0 max-w-[88px] rounded-full border px-1.5 py-0.5 text-[10px] font-semibold outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-60 ${tone}`}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
+        displayEmpty
+        sx={statusSelectSx(tone, 10, 96)}
+        className={tone}
       >
-        {options.map((option) => <option key={option} value={option}>{statusLabel(option)}</option>)}
-      </select>
-    </label>
+        {options.map((option) => <MenuItem key={option} value={option}>{statusLabel(option)}</MenuItem>)}
+      </Select>
+    </Stack>
   );
 }
 
-function SingleLessonFields({ form, setForm, students, googleConnected }: { form: LessonPayload; setForm: (form: LessonPayload) => void; students: Student[]; googleConnected: boolean }) {
-  return (
-    <>
-      <StudentSelect value={form.studentId} onChange={(student) => setForm({
-        ...form,
-        studentId: student?.id ?? '',
-        title: student ? lessonTitle(student) : '',
-        hourlyRate: student?.hourlyRate ?? 0,
-        inviteEmail: student?.parentEmail ?? '',
-      })} students={students} />
-      <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
-      <FormInput label="Date and time *" type="datetime-local" value={form.lessonDate} onChange={(value) => setForm({ ...form, lessonDate: value })} required />
-      <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
-      <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
-      <SelectField label="Lesson status *" value={form.status} onChange={(value) => setForm({ ...form, status: value as LessonStatus })} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']} />
-      <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
-        <SelectField label="Payment status *" value={form.paymentStatus} onChange={(value) => setForm({ ...form, paymentStatus: value as PaymentStatus })} options={['UNPAID', 'PAID', 'PARTIAL']} />
-        <GoogleNotifications value={form.googleExtraReminderMinutes ?? null} disabled={!googleConnected || !form.syncToGoogle} onChange={(googleExtraReminderMinutes) => setForm({ ...form, googleExtraReminderMinutes })} />
-      </div>
-      <CalendarSyncFields
-        boardLink={form.miroBoardUrl ?? ''}
-        inviteEmail={form.inviteEmail ?? ''}
-        googleColorId={form.googleColorId ?? ''}
-        syncToGoogle={Boolean(form.syncToGoogle)}
-        googleConnected={googleConnected}
-        onBoardLinkChange={(miroBoardUrl) => setForm({ ...form, miroBoardUrl })}
-        onInviteEmailChange={(inviteEmail) => setForm({ ...form, inviteEmail })}
-        onSyncChange={(syncToGoogle) => setForm({ ...form, syncToGoogle })}
-        onColorChange={(googleColorId) => setForm({ ...form, googleColorId })}
-      />
-      <TextArea label="Lesson notes" value={form.lessonNotes ?? ''} onChange={(value) => setForm({ ...form, lessonNotes: value })} />
-      <TextArea label="Homework" value={form.homework ?? ''} onChange={(value) => setForm({ ...form, homework: value })} />
-    </>
-  );
-}
-
-function RecurringFields({ form, setForm, students, googleConnected }: { form: RecurringLessonPayload; setForm: (form: RecurringLessonPayload) => void; students: Student[]; googleConnected: boolean }) {
-  return (
-    <>
-      <StudentSelect value={form.studentId} onChange={(student) => setForm({
-        ...form,
-        studentId: student?.id ?? '',
-        title: student ? lessonTitle(student) : '',
-        hourlyRate: student?.hourlyRate ?? 0,
-        inviteEmail: student?.parentEmail ?? '',
-      })} students={students} />
-      <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
-      <FormInput label="First lesson date and time *" type="datetime-local" value={form.firstLessonDate} onChange={(value) => setForm({ ...form, firstLessonDate: value })} required />
-      <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
-      <FormInput label="Hourly rate ($) *" type="number" value={String(form.hourlyRate)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
-      <FormInput label="Repeat every weeks" type="number" value={String(form.intervalCount ?? '')} onChange={(value) => setForm({ ...form, intervalCount: value ? Number(value) : undefined })} />
-      <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
-        <FormInput label="Repeat until" type="datetime-local" value={form.recurrenceUntil ?? ''} onChange={(value) => setForm({ ...form, recurrenceUntil: value || undefined })} />
-        <GoogleNotifications value={form.googleExtraReminderMinutes ?? null} disabled={!googleConnected || !form.syncToGoogle} onChange={(googleExtraReminderMinutes) => setForm({ ...form, googleExtraReminderMinutes })} />
-      </div>
-      <CalendarSyncFields
-        boardLink={form.miroBoardUrl ?? ''}
-        inviteEmail={form.inviteEmail ?? ''}
-        googleColorId={form.googleColorId ?? ''}
-        syncToGoogle={Boolean(form.syncToGoogle)}
-        googleConnected={googleConnected}
-        onBoardLinkChange={(miroBoardUrl) => setForm({ ...form, miroBoardUrl })}
-        onInviteEmailChange={(inviteEmail) => setForm({ ...form, inviteEmail })}
-        onSyncChange={(syncToGoogle) => setForm({ ...form, syncToGoogle })}
-        onColorChange={(googleColorId) => setForm({ ...form, googleColorId })}
-      />
-      <TextArea label="Lesson notes" value={form.lessonNotes ?? ''} onChange={(value) => setForm({ ...form, lessonNotes: value })} />
-      <TextArea label="Homework" value={form.homework ?? ''} onChange={(value) => setForm({ ...form, homework: value })} />
-    </>
-  );
-}
-
-function StudentSelect({ value, onChange, students }: { value: string; onChange: (student?: Student) => void; students: Student[] }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-foreground">Student *</span>
-      <select
-        className="input"
-        value={value}
-        onChange={(event) => {
-          const student = students.find((item) => item.id === event.target.value);
-          onChange(student);
-        }}
-        required
-      >
-        <option value="">Select student</option>
-        {students.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function lessonTitle(student: Student) {
-  return [student.name, student.schoolYear, student.subject].filter(Boolean).join(' ');
-}
-
-function FormInput({ label, value, onChange, type = 'text', required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-foreground">{label}</span>
-      <input className="input" type={type} value={value} onChange={(event) => onChange(event.target.value)} required={required} />
-    </label>
-  );
-}
-
-function SelectField({ label, value, onChange, options }: { label: string; value?: string; onChange: (value: string) => void; options: string[] }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-foreground">{label}</span>
-      <select className="input" value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => <option key={option} value={option}>{statusLabel(option)}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function SyncToggle({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
-  return (
-    <label className={`flex min-h-10 items-center gap-2 text-sm ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 rounded border-input text-neutral-700 focus:ring-2 focus:ring-neutral-200 disabled:opacity-50" />
-      Add to Google Calendar
-    </label>
-  );
-}
-
-function CalendarSyncFields({
-  boardLink,
-  inviteEmail,
-  googleColorId,
-  syncToGoogle,
-  googleConnected,
-  onBoardLinkChange,
-  onInviteEmailChange,
-  onSyncChange,
-  onColorChange,
-}: {
-  boardLink: string;
-  inviteEmail: string;
-  googleColorId: string;
-  syncToGoogle: boolean;
-  googleConnected: boolean;
-  onBoardLinkChange: (value: string) => void;
-  onInviteEmailChange: (value: string) => void;
-  onSyncChange: (value: boolean) => void;
-  onColorChange: (value: string) => void;
-}) {
-  return (
-    <div className="grid gap-4 md:col-span-2 md:grid-cols-2">
-      <FormInput label="Board link" type="url" value={boardLink} onChange={onBoardLinkChange} />
-      <FormInput label="Invite email" type="email" value={inviteEmail} onChange={onInviteEmailChange} />
-      <div className="md:max-w-[240px]">
-        <GoogleColorSelect value={googleColorId} disabled={!googleConnected || !syncToGoogle} onChange={onColorChange} />
-      </div>
-      <div className="flex items-end">
-        <SyncToggle checked={syncToGoogle} disabled={!googleConnected} onChange={onSyncChange} />
-      </div>
-    </div>
-  );
-}
-
-function GoogleColorSelect({ value, disabled, onChange }: { value: string; disabled: boolean; onChange: (value: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const selected = googleCalendarColors.find((color) => color.id === value) ?? googleCalendarColors[0];
-  return (
-    <div className={`relative ${disabled ? 'opacity-60' : ''}`}>
-      <span className="mb-1.5 block text-sm font-medium text-foreground">Google event color</span>
-      <button
-        type="button"
-        className="input flex h-10 items-center justify-between gap-2 text-left disabled:cursor-not-allowed"
-        disabled={disabled}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="h-4 w-4 shrink-0 rounded-full border border-border" style={{ backgroundColor: selected.swatch }} aria-hidden="true" />
-          <span className="truncate">{selected.label}</span>
-        </span>
-        <Icon name="arrowRight" className={`h-4 w-4 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
-      </button>
-      {open && !disabled && (
-        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-card p-1 shadow-lg" role="listbox">
-          {googleCalendarColors.map((color) => (
-            <button
-              key={color.id || 'default'}
-              type="button"
-              className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted ${color.id === value ? 'bg-muted text-foreground' : 'text-foreground'}`}
-              role="option"
-              aria-selected={color.id === value}
-              onClick={() => {
-                onChange(color.id);
-                setOpen(false);
-              }}
-            >
-              <span className="h-4 w-4 shrink-0 rounded-full border border-border" style={{ backgroundColor: color.swatch }} aria-hidden="true" />
-              <span>{color.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GoogleNotifications({ value, disabled, onChange }: { value: number | null; disabled: boolean; onChange: (value: number | null) => void }) {
-  const extra = value == null ? null : reminderOption(value);
-  const [expanded, setExpanded] = useState(Boolean(extra));
-
-  useEffect(() => {
-    if (extra) {
-      setExpanded(true);
-    }
-  }, [extra?.minutes]);
-
-  return (
-    <div className={`block ${disabled ? 'opacity-60' : ''}`}>
-      <span className="mb-1.5 block text-sm font-medium text-foreground">Notifications</span>
-      <div className="rounded-md border border-border bg-card p-2">
-        <button
-          type="button"
-          className="flex min-h-9 w-full items-center justify-between gap-3 rounded-md px-1 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:hover:bg-transparent"
-          disabled={disabled}
-          aria-expanded={expanded}
-          onClick={() => setExpanded((current) => !current)}
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            <Icon name="alert" className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0">
-              <span className="block truncate">1 hour before</span>
-              {extra && !expanded && <span className="block truncate text-xs text-muted-foreground">Also {reminderLabel(extra.minutes)}</span>}
-            </span>
-          </span>
-          <Icon name="chevronDown" className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
-        </button>
-        {expanded && extra ? (
-          <div className="mt-2">
-            <GoogleNotificationRow minutes={extra.minutes} disabled={disabled} onChange={onChange} onRemove={() => onChange(null)} />
-          </div>
-        ) : expanded ? (
-          <button type="button" className="mt-2 inline-flex h-9 items-center gap-2 rounded-md px-2 text-sm font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60" disabled={disabled} onClick={() => onChange(10)}>
-            <Icon name="plus" className="h-4 w-4" />
-            Add notification
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function GoogleNotificationRow({ minutes, disabled = false, onChange, onRemove }: { minutes: number; disabled?: boolean; onChange?: (value: number) => void; onRemove?: () => void }) {
-  const selected = reminderOption(minutes);
-  const unitOptions = googleReminderOptions.map((option) => option.unit);
-  const selectedUnit = googleReminderOptions.find((option) => option.unit === selected.unit) ?? googleReminderOptions[0];
-  return (
-    <div className="grid gap-2 sm:grid-cols-[90px_minmax(110px,1fr)_36px]">
-      <input
-        className="input h-10"
-        type="number"
-        min={selectedUnit.min}
-        max={selectedUnit.max}
-        value={selected.amount}
-        disabled={disabled}
-        onChange={(event) => {
-          const amount = clampReminderAmount(Number(event.target.value), selectedUnit);
-          onChange?.(amount * selectedUnit.multiplier);
-        }}
-      />
-      <select
-        className="input h-10"
-        value={selected.unit}
-        disabled={disabled}
-        onChange={(event) => {
-          const next = googleReminderOptions.find((option) => option.unit === event.target.value);
-          if (next) onChange?.(clampReminderAmount(selected.amount, next) * next.multiplier);
-        }}
-      >
-        {unitOptions.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
-      </select>
-      <button
-        type="button"
-        className="icon-button h-10 w-10 disabled:cursor-not-allowed disabled:opacity-30"
-        disabled={disabled}
-        onClick={onRemove}
-        aria-label="Remove notification"
-        title="Remove notification"
-      >
-        <Icon name="x" className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
-function reminderOption(minutes: number) {
-  const exactUnit = googleReminderOptions.find((option) => minutes % option.multiplier === 0 && minutes / option.multiplier >= option.min && minutes / option.multiplier <= option.max);
-  const unit = exactUnit ?? googleReminderOptions[0];
+function statusSelectSx(tone: string, fontSize: number, minWidth: number) {
+  const palette = statusTonePalette(tone);
   return {
-    amount: clampReminderAmount(Math.round(minutes / unit.multiplier), unit),
-    unit: unit.unit,
-    minutes: clampReminderAmount(Math.round(minutes / unit.multiplier), unit) * unit.multiplier,
+    minWidth,
+    borderRadius: 1.5,
+    bgcolor: palette.bg,
+    color: palette.color,
+    fontSize,
+    fontWeight: 500,
+    lineHeight: 1.2,
+    '& .MuiSelect-select': {
+      minHeight: 'auto',
+      py: 0.55,
+      pl: 1,
+      pr: 3,
+    },
+    '& .MuiOutlinedInput-notchedOutline': {
+      borderColor: palette.border,
+    },
+    '&:hover .MuiOutlinedInput-notchedOutline': {
+      borderColor: palette.border,
+    },
+    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+      borderColor: palette.border,
+      borderWidth: 1,
+    },
+    '& .MuiSvgIcon-root': {
+      color: palette.color,
+      fontSize: 18,
+    },
   };
 }
 
-function reminderLabel(minutes: number) {
-  const option = reminderOption(minutes);
-  const unit = option.amount === 1 ? option.unit.replace(/s$/, '') : option.unit;
-  return `${option.amount} ${unit} before`;
-}
-
-function clampReminderAmount(amount: number, unit: { min: number; max: number }) {
-  if (!Number.isFinite(amount)) {
-    return unit.min;
-  }
-  return Math.max(unit.min, Math.min(unit.max, Math.round(amount)));
-}
-
-function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <label className="block md:col-span-2">
-      <span className="mb-1.5 block text-sm font-medium text-foreground">{label}</span>
-      <textarea className="input min-h-20 resize-none" value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
-  );
-}
-
-function LessonTable({ lessons, onEdit, onDelete }: { lessons: Lesson[]; onEdit: (lesson: Lesson) => void; onDelete: (lesson: Lesson) => void }) {
-  const pageSize = 5;
-  const [page, setPage] = useState(0);
-  const [sort, setSort] = useState<'created' | 'date-desc' | 'date-asc'>('created');
-  const [showFilters, setShowFilters] = useState(false);
-  const [studentId, setStudentId] = useState('');
-  const [titleSearch, setTitleSearch] = useState('');
-  const [lessonDate, setLessonDate] = useState('');
-  const [lessonTime, setLessonTime] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState('');
-  const [lessonStatus, setLessonStatus] = useState('');
-  const studentOptions = useMemo(() => Array.from(new Map(lessons.map((lesson) => [lesson.studentId, lesson.studentName])).entries())
-    .sort((a, b) => a[1].localeCompare(b[1])), [lessons]);
-  const filteredLessons = useMemo(() => {
-    const titleMatcher = searchMatcher(titleSearch);
-    return lessons
-      .filter((lesson) => !studentId || lesson.studentId === studentId)
-      .filter((lesson) => !titleSearch || titleMatcher.test(lesson.title ?? ''))
-      .filter((lesson) => !lessonDate || toDateInputValue(new Date(lesson.lessonDate)) === lessonDate)
-      .filter((lesson) => !lessonTime || toTimeInputValue(new Date(lesson.lessonDate)) === lessonTime)
-      .filter((lesson) => !paymentStatus || lesson.paymentStatus === paymentStatus)
-      .filter((lesson) => !lessonStatus || lesson.status === lessonStatus)
-      .sort((a, b) => sort === 'date-asc'
-        ? new Date(a.lessonDate).getTime() - new Date(b.lessonDate).getTime()
-        : sort === 'date-desc'
-          ? new Date(b.lessonDate).getTime() - new Date(a.lessonDate).getTime()
-          : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [lessonDate, lessonStatus, lessonTime, lessons, paymentStatus, sort, studentId, titleSearch]);
-  const totalPages = Math.ceil(filteredLessons.length / pageSize);
-  const safePage = totalPages === 0 ? 0 : Math.min(page, totalPages - 1);
-  const firstRow = safePage * pageSize;
-  const visibleLessons = filteredLessons.slice(firstRow, firstRow + pageSize);
-
-  useEffect(() => {
-    if (page !== safePage) {
-      setPage(safePage);
-    }
-  }, [page, safePage]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [lessonDate, lessonStatus, lessonTime, paymentStatus, sort, studentId, titleSearch]);
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-muted/45">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Lesson history</h2>
-          <p className="text-sm text-muted-foreground">{filteredLessons.length} of {lessons.length} lessons shown</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {filteredLessons.length > 0 && <p className="text-sm text-muted-foreground">Showing {firstRow + 1}-{Math.min(firstRow + pageSize, filteredLessons.length)} of {filteredLessons.length}</p>}
-          <button className="button-secondary gap-2" type="button" aria-expanded={showFilters} onClick={() => setShowFilters((current) => !current)}>
-            Filters
-            <span className="text-xs">{showFilters ? '▲' : '▼'}</span>
-          </button>
-        </div>
-      </div>
-      {showFilters && <div className="grid gap-3 border-b border-border bg-muted/65 p-4 md:grid-cols-2 xl:grid-cols-4">
-        <label className="xl:col-span-2">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Search title</span>
-          <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">
-              <Icon name="search" className="h-4 w-4" />
-            </span>
-            <input className="input bg-white/80 !pl-10" value={titleSearch} onChange={(event) => setTitleSearch(event.target.value)} placeholder="Search for anything" />
-          </div>
-        </label>
-        <HistorySelect label="Student" value={studentId} onChange={setStudentId} options={studentOptions.map(([value, label]) => ({ value, label }))} placeholder="All students" />
-        <HistoryInput label="Lesson date" type="date" value={lessonDate} onChange={setLessonDate} />
-        <HistoryInput label="Start time" type="time" value={lessonTime} onChange={setLessonTime} />
-        <HistorySelect label="Payment" value={paymentStatus} onChange={setPaymentStatus} options={['UNPAID', 'PAID', 'PARTIAL'].map((value) => ({ value, label: statusLabel(value) }))} placeholder="All payments" />
-        <HistorySelect label="Lesson status" value={lessonStatus} onChange={setLessonStatus} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].map((value) => ({ value, label: statusLabel(value) }))} placeholder="All statuses" />
-        <div className="flex items-end xl:col-span-4">
-          <button className="button-secondary" type="button" onClick={() => {
-            setSort('created');
-            setStudentId('');
-            setTitleSearch('');
-            setLessonDate('');
-            setLessonTime('');
-            setPaymentStatus('');
-            setLessonStatus('');
-          }}>Clear filters</button>
-        </div>
-      </div>}
-      <div className="max-h-[430px] overflow-auto bg-white/70">
-        <table className="w-full min-w-[980px]">
-          <thead className="border-b border-border bg-muted">
-            <tr>
-              <Th>Student</Th>
-              <Th>Title</Th>
-              <th className="px-6 py-3 text-left text-sm font-medium text-foreground">
-                <button className="inline-flex items-center gap-1 transition-colors hover:text-primary" type="button" onClick={() => setSort((current) => current === 'date-desc' ? 'date-asc' : 'date-desc')}>
-                  Date & Time
-                  <span className={`text-xs ${sort === 'created' ? 'text-muted-foreground' : 'text-primary'}`}>{sort === 'date-asc' ? '▲' : '▼'}</span>
-                </button>
-              </th>
-              <Th>Status</Th>
-              <Th>Payment</Th>
-              <Th>Links</Th>
-              <Th>Calendar</Th>
-              <Th align="right">Actions</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleLessons.map((lesson) => (
-              <tr key={lesson.id} className="border-b border-border last:border-0 hover:bg-muted/50">
-                <td className="px-6 py-4 text-foreground">{lesson.studentName}</td>
-                <td className="px-6 py-4 text-foreground">{lesson.title}</td>
-                <td className="px-6 py-4">
-                  <p className="text-foreground">{new Date(lesson.lessonDate).toLocaleDateString()}</p>
-                  <p className="text-sm text-muted-foreground">{timeLabel(lesson.lessonDate)}</p>
-                </td>
-                <td className="px-6 py-4"><StatusBadge status={lesson.status} /></td>
-                <td className="px-6 py-4"><PaymentBadge status={lesson.paymentStatus} /></td>
-                <td className="px-6 py-4"><LessonLinks lesson={lesson} /></td>
-                <td className="px-6 py-4"><GoogleBadge lesson={lesson} /></td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center justify-end gap-2">
-                    <button className="icon-button" onClick={() => onEdit(lesson)} aria-label={`Edit ${lesson.title || lesson.studentName}`}>
-                      <Icon name="edit" className="h-4 w-4" />
-                    </button>
-                    <button className="icon-button hover:bg-destructive/10 hover:text-destructive" onClick={() => onDelete(lesson)} aria-label={`Delete ${lesson.title || lesson.studentName} and synced Google event`}>
-                      <Icon name="trash" className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredLessons.length === 0 && <p className="p-6 text-muted-foreground">{lessons.length === 0 ? 'No lessons yet.' : 'No lessons match your filters.'}</p>}
-      </div>
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-border p-4">
-          <button className="button-secondary" disabled={safePage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))}>Previous</button>
-          <p className="text-sm text-muted-foreground">Page {safePage + 1} of {totalPages}</p>
-          <button className="button-secondary" disabled={safePage + 1 >= totalPages} onClick={() => setPage((current) => current + 1)}>Next</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HistoryInput({ label, type, value, onChange }: { label: string; type: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <label>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      <input className="input bg-white/80" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
-  );
-}
-
-function HistorySelect({ label, value, onChange, options, placeholder }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }>; placeholder?: string }) {
-  return (
-    <label>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      <select className="input bg-white/80" value={value} onChange={(event) => onChange(event.target.value)}>
-        {placeholder && <option value="">{placeholder}</option>}
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function LessonLinks({ lesson }: { lesson: Lesson }) {
-  return (
-    <div className="flex flex-col gap-1 text-sm">
-      {lesson.googleMeetLink && <a className="text-primary underline-offset-2 hover:underline" href={lesson.googleMeetLink} target="_blank" rel="noreferrer">Meeting</a>}
-      {lesson.miroBoardUrl && <a className="text-primary underline-offset-2 hover:underline" href={lesson.miroBoardUrl} target="_blank" rel="noreferrer">Board</a>}
-      {!lesson.googleMeetLink && !lesson.miroBoardUrl && <span className="text-muted-foreground">No links</span>}
-    </div>
-  );
-}
-
-function GoogleBadge({ lesson }: { lesson: Lesson }) {
-  if (lesson.lessonSeriesId) return <span className="rounded bg-accent px-2 py-1 text-xs font-medium text-accent-foreground">Series</span>;
-  if (!lesson.googleSyncEnabled) return <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">Not synced</span>;
-  if (lesson.googleSyncStatus === 'SYNCED') return <span className="rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800">Synced</span>;
-  if (lesson.googleSyncStatus === 'FAILED') {
-    return (
-      <div className="max-w-52">
-        <span className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-800">Failed</span>
-        {lesson.googleSyncError && <p className="mt-2 text-xs text-red-700">{lesson.googleSyncError}</p>}
-      </div>
-    );
-  }
-  return <span className="rounded bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800">Needs connection</span>;
-}
-
-function StatusBadge({ status }: { status: LessonStatus }) {
-  const styles: Record<LessonStatus, string> = {
-    SCHEDULED: 'bg-blue-100 text-blue-800',
-    COMPLETED: 'bg-green-100 text-green-800',
-    CANCELLED: 'bg-gray-100 text-gray-800',
-    NO_SHOW: 'bg-red-100 text-red-800',
-  };
-  return <span className={`rounded px-2 py-1 text-xs font-medium ${styles[status]}`}>{statusLabel(status)}</span>;
-}
-
-function PaymentBadge({ status }: { status: PaymentStatus }) {
-  const styles: Record<PaymentStatus, string> = {
-    PAID: 'bg-green-100 text-green-800',
-    UNPAID: 'bg-red-100 text-red-800',
-    PARTIAL: 'bg-yellow-100 text-yellow-800',
-  };
-  return <span className={`rounded px-2 py-1 text-xs font-medium ${styles[status]}`}>{statusLabel(status)}</span>;
-}
-
-function statusLabel(status: string) {
-  return status.toLowerCase().replace('_', ' ').replace(/^\w/, (letter) => letter.toUpperCase());
-}
-
-function Th({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' }) {
-  return <th className={`px-6 py-3 text-sm font-medium text-foreground ${align === 'right' ? 'text-right' : 'text-left'}`}>{children}</th>;
-}
-
-function startOfWeek(date: Date) {
-  const copy = new Date(date);
-  const day = copy.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  copy.setDate(copy.getDate() + diff);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-function startOfDay(date: Date) {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-function startOfMonthGrid(date: Date) {
-  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
-  return startOfWeek(firstDay);
-}
-
-function calendarViewDate(date: Date, view: CalendarView, direction: number) {
-  if (view === 'DAILY') return addDays(date, direction);
-  if (view === 'WEEKLY') return addDays(date, direction * 7);
-  const copy = new Date(date);
-  copy.setDate(1);
-  copy.setMonth(copy.getMonth() + direction);
-  return copy;
-}
-
-function calendarRangeLabel(date: Date, view: CalendarView) {
-  if (view === 'DAILY') return date.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  if (view === 'MONTHLY') return date.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
-  const weekStart = startOfWeek(date);
-  const weekEnd = addDays(weekStart, 6);
-  if (weekStart.getMonth() === weekEnd.getMonth()) {
-    return `${weekStart.toLocaleDateString('en-AU', { day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}`;
-  }
-  return `${weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} - ${weekEnd.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-}
-
-function addDays(date: Date, days: number) {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
-
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
-function toDateTimeLocal(date: Date) {
-  const offset = date.getTimezoneOffset();
-  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
-}
-
-function timeLabel(date: string) {
-  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function lessonTimeRange(lesson: Lesson) {
-  const start = new Date(lesson.lessonDate);
-  const end = lessonEndTime(lesson);
-  return `${timeLabel(start.toISOString())} - ${timeLabel(end.toISOString())}`;
-}
-
-function lessonEndTime(lesson: Lesson) {
-  return new Date(new Date(lesson.lessonDate).getTime() + lesson.durationMinutes * 60_000);
-}
-
-function lessonAmount(lesson: Lesson) {
-  return lessonAmountNumber.format(lesson.hourlyRate * lesson.durationMinutes / 60);
-}
-
-function searchMatcher(search: string) {
-  try {
-    return new RegExp(search, 'i');
-  } catch {
-    return new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-  }
-}
-
-function toDateInputValue(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function toTimeInputValue(date: Date) {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+function statusTonePalette(tone: string) {
+  if (tone.includes('blue')) return { bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af' };
+  if (tone.includes('green')) return { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534' };
+  if (tone.includes('red')) return { bg: '#fef2f2', border: '#fecaca', color: '#991b1b' };
+  if (tone.includes('yellow')) return { bg: '#fefce8', border: '#fde68a', color: '#854d0e' };
+  return { bg: '#f9fafb', border: '#e5e7eb', color: '#374151' };
 }

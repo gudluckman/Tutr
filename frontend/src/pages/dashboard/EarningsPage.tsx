@@ -1,4 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Box,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  FormControl,
+  FormControlLabel,
+  IconButton,
+  InputLabel,
+  LinearProgress,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from '@mui/material';
+import type { ChangeEvent, ReactNode } from 'react';
 import { useState } from 'react';
 import { exportEarningsCsv, getEarnings, importEarningsCsv } from '../../api/analyticsApi';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
@@ -35,9 +59,7 @@ export function EarningsPage() {
     onSuccess: (result) => {
       setImportResult(result);
       setImportProgress(null);
-      if (result.errors.length > 0) {
-        return;
-      }
+      if (result.errors.length > 0) return;
       setFile(null);
       setShowImportModal(false);
       setReplaceExistingImports(false);
@@ -80,12 +102,21 @@ export function EarningsPage() {
     exportCsv.mutate();
   };
 
+  const closeImport = () => {
+    setShowImportModal(false);
+    setFile(null);
+    setReplaceExistingImports(false);
+    setImportProgress(null);
+  };
+
   return (
-    <div className="p-4 sm:p-8">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">Earnings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Review income from paid lessons week by week, including cancellation payments.</p>
-      </div>
+    <Box sx={{ p: { xs: 2, sm: 4 } }}>
+      <Box sx={{ mb: { xs: 3, sm: 4 } }}>
+        <Typography variant="h4" sx={{ fontWeight: 600 }}>Earnings</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Review income from paid lessons week by week, including cancellation payments.
+        </Typography>
+      </Box>
 
       <ErrorAlert className="mb-6" error={earnings.error} fallback="Could not load your earnings. Please refresh the page." />
       {!showImportModal && (
@@ -93,43 +124,36 @@ export function EarningsPage() {
       )}
       <ErrorAlert className="mb-6" error={exportCsv.error} fallback="Could not export your earnings. Please try again." />
       {exportMessage && (
-        <div className="mb-6 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
-          {exportMessage}
-        </div>
+        <Paper variant="outlined" sx={{ mb: 3, borderColor: 'warning.light', bgcolor: 'warning.50', p: 2, color: 'warning.dark' }}>
+          <Typography variant="body2">{exportMessage}</Typography>
+        </Paper>
       )}
 
-      <div className="mb-8 grid gap-4 md:grid-cols-3">
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 2, mb: 4 }}>
         <OverviewStat icon="dollar" label="Total earnings" value={money.format(data?.totalEarnings ?? 0)} />
         <OverviewStat icon="clock" label="Total hours" value={`${hours.format(data?.totalHours ?? 0)} hrs`} />
         <OverviewStat icon="dashboard" label="Average hourly rate" value={`${money.format(data?.averageHourlyRate ?? 0)}/hr`} />
-      </div>
+      </Box>
 
-      <section className="mb-8 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-primary">
-              <Icon name="upload" className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-foreground">Historical earnings</h2>
-              <p className="truncate text-xs text-muted-foreground">Import weekly CSV history or download a starter template.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <a
-              className="icon-button bg-white text-foreground hover:text-primary"
-              href={csvTemplateUrl}
-              download="tutr-earnings-template.csv"
-              title="Download CSV template"
-              aria-label="Download CSV template"
-            >
+      <Paper variant="outlined" sx={{ mb: 4, borderColor: 'success.light', bgcolor: 'success.50', p: 2, borderRadius: 2 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+            <Box sx={{ display: 'grid', placeItems: 'center', width: 36, height: 36, borderRadius: 1.5, bgcolor: 'white', color: 'primary.main', flexShrink: 0 }}>
+              <Icon name="historicalStats" className="h-4 w-4" />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Historical earnings</Typography>
+              <Typography variant="caption" color="text.secondary" noWrap>Import weekly CSV history or download a starter template.</Typography>
+            </Box>
+          </Stack>
+          <Stack direction="row" sx={{ gap: 1 }}>
+            <IconButton component="a" href={csvTemplateUrl} download="tutr-earnings-template.csv" title="Download CSV template" aria-label="Download CSV template" sx={{ bgcolor: 'white' }}>
               <Icon name="download" className="h-4 w-4" />
-            </a>
-            <button
-              className="icon-button bg-white text-foreground hover:text-primary"
-              type="button"
+            </IconButton>
+            <IconButton
               title="Import earnings CSV"
               aria-label="Import earnings CSV"
+              sx={{ bgcolor: 'white' }}
               onClick={() => {
                 setShowImportModal(true);
                 setImportResult(null);
@@ -138,67 +162,74 @@ export function EarningsPage() {
               }}
             >
               <Icon name="upload" className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+            </IconButton>
+          </Stack>
+        </Stack>
 
         {importResult && !showImportModal && (
-          <div className="mt-3 rounded-md bg-white/80 p-3 text-sm">
-            <p className="font-medium text-foreground">
+          <Paper sx={{ mt: 2, p: 2, bgcolor: 'white' }} elevation={0}>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
               Imported {importResult.importedRows} new rows and updated {importResult.updatedRows} existing rows.
-            </p>
+            </Typography>
             {importResult.errors.length > 0 && (
-              <div className="mt-2 text-destructive">
-                <p className="font-medium">Import notes:</p>
-                <ul className="mt-1 list-disc space-y-1 pl-5">
+              <Box sx={{ mt: 1.5, color: 'error.main' }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>Import notes:</Typography>
+                <Box component="ul" sx={{ mt: 0.5, pl: 2.5 }}>
                   {importResult.errors.slice(0, 6).map((error) => <li key={error}>{error}</li>)}
-                </ul>
-              </div>
+                </Box>
+              </Box>
             )}
-          </div>
+          </Paper>
         )}
-      </section>
+      </Paper>
 
-      <section className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Weekly income</h2>
-            <p className="text-sm text-muted-foreground">{data?.totalWeeks ?? 0} earning weeks recorded for {rangeLabel}</p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <select
-              className="h-10 rounded-md border border-border bg-white px-3 text-sm text-foreground shadow-sm focus:border-neutral-300 focus:outline-none"
-              value={selectedYear}
-              aria-label="Filter earnings by year"
-              onChange={(event) => {
-                setSelectedYear(event.target.value);
-                setSelectedMonth('');
-                setPage(0);
-              }}
-            >
-              <option value="">All time</option>
-              {data?.availableYears.map((year) => <option key={year} value={year}>{year}</option>)}
-            </select>
-            <select
-              className="h-10 rounded-md border border-border bg-white px-3 text-sm text-foreground shadow-sm focus:border-neutral-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-              value={selectedMonth}
-              aria-label="Filter earnings by month"
-              disabled={!selectedYear}
-              onChange={(event) => {
-                setSelectedMonth(event.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="">All months</option>
-              {data?.availableMonths.map((month) => (
-                <option key={month} value={month.slice(5, 7)}>{monthLabel(month)}</option>
-              ))}
-            </select>
-            <p className="text-sm text-muted-foreground">
+      <Paper variant="outlined" sx={{ overflow: 'hidden', borderRadius: 2 }}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          sx={{ alignItems: { xs: 'stretch', md: 'center' }, justifyContent: 'space-between', gap: 2, borderBottom: 1, borderColor: 'divider', p: { xs: 2, sm: 2.5 } }}
+        >
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>Weekly income</Typography>
+            <Typography variant="body2" color="text.secondary">{data?.totalWeeks ?? 0} earning weeks recorded for {rangeLabel}</Typography>
+          </Box>
+          <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'flex-end', gap: 1.5 }}>
+            <FormControl size="small" sx={{ minWidth: 132 }}>
+              <InputLabel id="earnings-year-label">Year</InputLabel>
+              <Select
+                labelId="earnings-year-label"
+                label="Year"
+                value={selectedYear}
+                onChange={(event) => {
+                  setSelectedYear(event.target.value);
+                  setSelectedMonth('');
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="">All time</MenuItem>
+                {data?.availableYears.map((year) => <MenuItem key={year} value={String(year)}>{year}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 148 }} disabled={!selectedYear}>
+              <InputLabel id="earnings-month-label">Month</InputLabel>
+              <Select
+                labelId="earnings-month-label"
+                label="Month"
+                value={selectedMonth}
+                onChange={(event) => {
+                  setSelectedMonth(event.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="">All months</MenuItem>
+                {data?.availableMonths.map((month) => (
+                  <MenuItem key={month} value={month.slice(5, 7)}>{monthLabel(month)}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
               Page {data?.totalPages ? (data.page + 1) : 0} of {data?.totalPages ?? 0}
-            </p>
-            <button
-              className="icon-button border border-border bg-white text-foreground hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            </Typography>
+            <IconButton
               type="button"
               title="Export earnings CSV"
               aria-label="Export earnings CSV"
@@ -206,197 +237,191 @@ export function EarningsPage() {
               onClick={handleExport}
             >
               <Icon name="csvDownload" className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+            </IconButton>
+          </Stack>
+        </Stack>
 
-        <div className={`overflow-x-auto transition-opacity duration-200 ${earnings.isFetching ? 'opacity-70' : 'opacity-100'}`}>
-          <table className="w-full min-w-[620px]">
-            <thead className="border-b border-border bg-muted">
-              <tr>
-                <Th>Week</Th>
-                <Th>Hours</Th>
-                <Th align="right">Income</Th>
-              </tr>
-            </thead>
-            <tbody>
+        <TableContainer sx={{ opacity: earnings.isFetching ? 0.7 : 1, transition: 'opacity 160ms ease' }}>
+          <Table sx={{ minWidth: 620 }}>
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'grey.50' }}>
+                <HeaderCell>Week</HeaderCell>
+                <HeaderCell>Hours</HeaderCell>
+                <HeaderCell align="right">Income</HeaderCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {data?.weeks.map((week) => (
-                <tr key={week.weekStart} className="border-b border-border last:border-0 hover:bg-muted/40">
-                  <td className="px-6 py-4">
-                    <p className="font-medium text-foreground">Monday, {dateLabel(week.weekStart)} - Sunday, {dateLabel(week.weekEnd)}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                <TableRow key={week.weekStart} hover>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>Monday, {dateLabel(week.weekStart)} - Sunday, {dateLabel(week.weekEnd)}</Typography>
+                    <Typography variant="caption" color="text.secondary">
                       {week.importedIncome > 0
                         ? `${money.format(week.importedIncome)} imported, ${money.format(week.lessonIncome)} from Tutr lessons`
                         : 'Monday to Sunday'}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-foreground">{hours.format(week.hours)} hrs</td>
-                  <td className="px-6 py-4 text-right font-semibold text-foreground">{money.format(week.income)}</td>
-                </tr>
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{hours.format(week.hours)} hrs</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 500 }}>{money.format(week.income)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-          {data?.weeks.length === 0 && <p className="p-6 text-sm text-muted-foreground">No paid lesson earnings yet.</p>}
-        </div>
+              {data?.weeks.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={3}>
+                    <Typography variant="body2" color="text.secondary">No paid lesson earnings yet.</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-        <div className="flex items-center justify-between border-t border-border p-4">
-          <button className="button-secondary" disabled={!data || data.page === 0 || earnings.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', borderTop: 1, borderColor: 'divider', p: 2 }}>
+          <Button variant="outlined" disabled={!data || data.page === 0 || earnings.isFetching} onClick={() => setPage((current) => Math.max(0, current - 1))}>
             Previous
-          </button>
-          <button className="button-secondary" disabled={!data || data.page + 1 >= data.totalPages || earnings.isFetching} onClick={() => setPage((current) => current + 1)}>
+          </Button>
+          <Button variant="outlined" disabled={!data || data.page + 1 >= data.totalPages || earnings.isFetching} onClick={() => setPage((current) => current + 1)}>
             Next
-          </button>
-        </div>
-      </section>
+          </Button>
+        </Stack>
+      </Paper>
 
-      {showImportModal && (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="import-earnings-title">
-          <form
-            className="w-full rounded-t-lg border border-border bg-card p-5 shadow-xl sm:mx-auto sm:max-w-lg sm:rounded-lg"
+      <Dialog open={showImportModal} onClose={closeImport} fullWidth maxWidth="sm" aria-labelledby="import-earnings-title">
+        <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+          <Box
+            component="form"
             onSubmit={(event) => {
               event.preventDefault();
               if (file) importCsv.mutate({ selectedFile: file, replaceExisting: replaceExistingImports });
             }}
           >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <h2 id="import-earnings-title" className="text-lg font-semibold text-foreground">Import historical earnings</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Upload weekly earnings history using the exact column names below.</p>
-              </div>
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-white text-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground"
-                onClick={() => { setShowImportModal(false); setFile(null); setReplaceExistingImports(false); setImportProgress(null); }}
-                aria-label="Close import form"
-                title="Close"
-              >
+            <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2.5 }}>
+              <Box>
+                <Typography id="import-earnings-title" variant="h6" sx={{ fontWeight: 600 }}>Import historical earnings</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Upload weekly earnings history using the exact column names below.</Typography>
+              </Box>
+              <IconButton type="button" onClick={closeImport} aria-label="Close import form" title="Close">
                 <Icon name="x" className="h-5 w-5" />
-              </button>
-            </div>
+              </IconButton>
+            </Stack>
 
             <ErrorAlert className="mb-4" error={importCsv.error} fallback="Could not import the CSV file. Please check the format and try again." />
 
             {importResult?.errors.length ? (
-              <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                <p className="font-medium">Fix these CSV issues and upload again.</p>
-                <ul className="mt-2 max-h-32 list-disc space-y-1 overflow-y-auto pl-5">
+              <Paper variant="outlined" sx={{ mb: 2, borderColor: 'error.light', bgcolor: 'error.50', p: 1.5, color: 'error.main' }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>Fix these CSV issues and upload again.</Typography>
+                <Box component="ul" sx={{ mt: 1, maxHeight: 128, overflowY: 'auto', pl: 2.5, fontSize: 14 }}>
                   {importResult.errors.slice(0, 8).map((error) => <li key={error}>{error}</li>)}
-                </ul>
+                </Box>
                 {importResult.errors.length > 8 && (
-                  <p className="mt-2 text-xs">Showing 8 of {importResult.errors.length} issues.</p>
+                  <Typography variant="caption">Showing 8 of {importResult.errors.length} issues.</Typography>
                 )}
-              </div>
+              </Paper>
             ) : null}
 
-            <div className="mb-4 overflow-hidden rounded-md border border-border">
-              <div className="bg-muted px-3 py-2 text-xs font-medium text-foreground">Required weekly CSV format</div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] text-left text-xs">
-                  <thead className="border-b border-border bg-white">
-                    <tr>
-                      <FormatTh>Start Date</FormatTh>
-                      <FormatTh>End Date</FormatTh>
-                      <FormatTh>Weekly Hours</FormatTh>
-                      <FormatTh>Weekly Income</FormatTh>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-card text-muted-foreground">
-                    <tr className="border-b border-border">
-                      <FormatTd>25/05/2026</FormatTd>
-                      <FormatTd>31/05/2026</FormatTd>
-                      <FormatTd>5</FormatTd>
-                      <FormatTd>350</FormatTd>
-                    </tr>
-                    <tr>
-                      <FormatTd>18/05/2026</FormatTd>
-                      <FormatTd>24/05/2026</FormatTd>
-                      <FormatTd>6</FormatTd>
-                      <FormatTd>420</FormatTd>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+              <Box sx={{ bgcolor: 'grey.50', px: 1.5, py: 1, fontSize: 12, fontWeight: 500 }}>Required weekly CSV format</Box>
+              <Table size="small" sx={{ minWidth: 420 }}>
+                <TableHead>
+                  <TableRow>
+                    <FormatCell header>Start Date</FormatCell>
+                    <FormatCell header>End Date</FormatCell>
+                    <FormatCell header>Weekly Hours</FormatCell>
+                    <FormatCell header>Weekly Income</FormatCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <FormatCell>25/05/2026</FormatCell>
+                    <FormatCell>31/05/2026</FormatCell>
+                    <FormatCell>5</FormatCell>
+                    <FormatCell>350</FormatCell>
+                  </TableRow>
+                  <TableRow>
+                    <FormatCell>18/05/2026</FormatCell>
+                    <FormatCell>24/05/2026</FormatCell>
+                    <FormatCell>6</FormatCell>
+                    <FormatCell>420</FormatCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-            <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-4 py-5 text-center transition-colors hover:bg-muted">
+            <Paper
+              component="label"
+              variant="outlined"
+              sx={{ display: 'flex', minHeight: 112, cursor: 'pointer', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', bgcolor: 'grey.50', px: 2, py: 2.5, textAlign: 'center' }}
+            >
               <Icon name="upload" className="mb-2 h-6 w-6 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">{file ? file.name : 'Drop CSV file'}</span>
-              <span className="mt-1 text-xs text-muted-foreground">CSV only, Monday-Sunday weeks, dates as dd/MM/yyyy</span>
-              <input
-                className="sr-only"
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>{file ? file.name : 'Drop CSV file'}</Typography>
+              <Typography variant="caption" color="text.secondary">CSV only, Monday-Sunday weeks, dates as dd/MM/yyyy</Typography>
+              <Box
+                component="input"
+                sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
                 type="file"
                 accept=".csv,text/csv"
-                onChange={(event) => {
+                onChange={(event: ChangeEvent<HTMLInputElement>) => {
                   setFile(event.target.files?.[0] ?? null);
                   setImportResult(null);
                   setImportProgress(null);
                 }}
               />
-            </label>
+            </Paper>
 
             {importProgress !== null && (
-              <div className="mt-4 rounded-md border border-border bg-muted/40 p-3">
-                <div className="mb-2 flex items-center justify-between text-xs font-medium text-foreground">
-                  <span>{importProgress < 100 ? 'Uploading CSV' : 'Validating CSV'}</span>
-                  <span>{importProgress}%</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-white">
-                  <div className="h-full rounded-full bg-primary transition-all duration-200" style={{ width: `${importProgress}%` }} />
-                </div>
-              </div>
+              <Paper variant="outlined" sx={{ mt: 2, bgcolor: 'grey.50', p: 1.5 }}>
+                <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 500 }}>{importProgress < 100 ? 'Uploading CSV' : 'Validating CSV'}</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 500 }}>{importProgress}%</Typography>
+                </Stack>
+                <LinearProgress variant="determinate" value={importProgress} />
+              </Paper>
             )}
 
-            <label className="mt-4 flex items-start gap-3 rounded-md border border-yellow-200 bg-yellow-50 p-3">
-              <input
-                className="mt-1 h-4 w-4 rounded border-border text-neutral-700 focus:ring-neutral-200"
-                type="checkbox"
-                checked={replaceExistingImports}
-                onChange={(event) => setReplaceExistingImports(event.target.checked)}
-              />
-              <span>
-                <span className="block text-sm font-medium text-foreground">Replace existing imported earnings</span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  Use this when fixing a previous upload. Tutr validates the CSV first, then replaces only imported history with this file.
-                </span>
-              </span>
-            </label>
+            <FormControlLabel
+              sx={{ mt: 2, alignItems: 'flex-start', border: 1, borderColor: 'warning.light', bgcolor: 'warning.50', borderRadius: 1.5, p: 1.5, mx: 0 }}
+              control={<Checkbox checked={replaceExistingImports} onChange={(event) => setReplaceExistingImports(event.target.checked)} />}
+              label={(
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>Replace existing imported earnings</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Use this when fixing a previous upload. Tutr validates the CSV first, then replaces only imported history with this file.
+                  </Typography>
+                </Box>
+              )}
+            />
 
-            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button type="button" className="button-secondary" onClick={() => { setShowImportModal(false); setFile(null); setReplaceExistingImports(false); setImportProgress(null); }}>Cancel</button>
-              <button type="submit" className="button gap-2" disabled={!file || importCsv.isPending}>
-                <Icon name="check" className="h-4 w-4" />
+            <Stack direction={{ xs: 'column-reverse', sm: 'row' }} sx={{ justifyContent: 'flex-end', gap: 1.5, mt: 3 }}>
+              <Button variant="outlined" type="button" onClick={closeImport}>Cancel</Button>
+              <Button variant="contained" type="submit" startIcon={<Icon name="check" className="h-4 w-4" />} disabled={!file || importCsv.isPending}>
                 {importCsv.isPending ? 'Importing...' : replaceExistingImports ? 'Replace imported history' : 'Confirm import'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-    </div>
+              </Button>
+            </Stack>
+          </Box>
+        </DialogContent>
+      </Dialog>
+    </Box>
   );
 }
 
 function OverviewStat({ icon, label, value }: { icon: IconName; label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-5">
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-primary">
+    <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+      <Box sx={{ display: 'grid', placeItems: 'center', mb: 2, width: 40, height: 40, borderRadius: 2, bgcolor: 'success.50', color: 'primary.main' }}>
         <Icon name={icon} className="h-5 w-5" />
-      </div>
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-    </div>
+      </Box>
+      <Typography variant="body2" color="text.secondary">{label}</Typography>
+      <Typography variant="h5" sx={{ mt: 0.5, fontWeight: 600 }}>{value}</Typography>
+    </Paper>
   );
 }
 
-function Th({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' }) {
-  return <th className={`px-6 py-3 text-sm font-medium text-foreground ${align === 'right' ? 'text-right' : 'text-left'}`}>{children}</th>;
+function HeaderCell({ children, align = 'left' }: { children: ReactNode; align?: 'left' | 'right' }) {
+  return <TableCell align={align} sx={{ fontSize: 14, fontWeight: 500 }}>{children}</TableCell>;
 }
 
-function FormatTh({ children }: { children: React.ReactNode }) {
-  return <th className="px-3 py-2 font-semibold text-foreground">{children}</th>;
-}
-
-function FormatTd({ children }: { children: React.ReactNode }) {
-  return <td className="px-3 py-2 font-mono">{children}</td>;
+function FormatCell({ children, header = false }: { children: ReactNode; header?: boolean }) {
+  return <TableCell sx={{ fontFamily: header ? undefined : 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, fontWeight: header ? 700 : 400 }}>{children}</TableCell>;
 }
 
 function dateLabel(date: string) {

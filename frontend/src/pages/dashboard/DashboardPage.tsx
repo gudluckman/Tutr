@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Box, Paper, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { getAnalyticsSummary } from '../../api/analyticsApi';
 import { RevenueBars } from '../../components/charts/RevenueBars';
@@ -20,39 +21,42 @@ export function DashboardPage() {
   }, [period]);
 
   return (
-    <div className="p-4 sm:p-8">
-      <h1 className="mb-6 text-2xl font-semibold text-foreground sm:mb-8 sm:text-3xl">Overview</h1>
+    <Box sx={{ p: { xs: 2, sm: 4 } }}>
+      <Typography variant="h4" sx={{ mb: { xs: 3, sm: 4 }, fontWeight: 600 }}>Overview</Typography>
       <ErrorAlert className="mb-6" error={summary.error} fallback="Could not load your dashboard. Please refresh the page." />
-      <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' }, gap: 3, mb: 4 }}>
         <Stat icon="dollar" label={`${currentPeriodLabel(period)} expected income`} value={money.format(data?.periodExpectedRevenue ?? 0)} />
         <Stat icon="check" label={`${currentPeriodLabel(period)} paid`} value={money.format(data?.periodPaidRevenue ?? 0)} />
         <Stat icon="alert" label={`${currentPeriodLabel(period)} outstanding`} value={money.format(data?.periodOutstandingRevenue ?? 0)} tone="warning" />
         <Stat icon="check" label="Completed lessons" value={String(data?.completedLessons ?? 0)} />
-      </div>
-      <section className="rounded-lg border border-border bg-card p-4 sm:p-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Income over time</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Expected lesson income by {periodNoun(period)}, split into paid and outstanding amounts.</p>
-          </div>
-          <div className="grid w-full grid-cols-2 rounded-lg border border-border bg-muted p-1 sm:inline-flex sm:w-auto">
+      </Box>
+
+      <Paper component="section" variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 2 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2, mb: 3 }}>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>Income over time</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Expected lesson income by {periodNoun(period)}, split into paid and outstanding amounts.
+            </Typography>
+          </Box>
+          <ToggleButtonGroup
+            exclusive
+            value={period}
+            size="small"
+            onChange={(_, value: RevenuePeriod | null) => value && setPeriod(value)}
+            aria-label="Revenue period"
+          >
             {revenuePeriods.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setPeriod(option)}
-                className={`rounded-md px-3 py-1.5 text-sm transition-colors ${period === option ? 'bg-card font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                {periodOptionLabel(option)}
-              </button>
+              <ToggleButton key={option} value={option}>{periodOptionLabel(option)}</ToggleButton>
             ))}
-          </div>
-        </div>
-        <div className="overflow-x-auto">
+          </ToggleButtonGroup>
+        </Stack>
+        <Box sx={{ overflowX: 'auto' }}>
           <RevenueBars data={data?.revenue ?? []} period={period} />
-        </div>
-      </section>
-    </div>
+        </Box>
+      </Paper>
+    </Box>
   );
 }
 
@@ -74,13 +78,14 @@ function periodNoun(period: RevenuePeriod) {
 }
 
 function Stat({ icon, label, value, tone = 'primary' }: { icon: IconName; label: string; value: string; tone?: 'primary' | 'warning' }) {
+  const warning = tone === 'warning';
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-lg ${tone === 'warning' ? 'bg-yellow-100 text-yellow-700' : 'bg-accent text-primary'}`}>
+    <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+      <Box sx={{ display: 'grid', placeItems: 'center', mb: 2, width: 48, height: 48, borderRadius: 2, bgcolor: warning ? '#fef3c7' : 'success.50', color: warning ? '#a16207' : 'primary.main' }}>
         <Icon name={icon} className="h-6 w-6" />
-      </div>
-      <p className="mb-1 text-sm text-muted-foreground">{label}</p>
-      <p className="text-2xl font-semibold text-foreground">{value}</p>
-    </div>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>{label}</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 600 }}>{value}</Typography>
+    </Paper>
   );
 }

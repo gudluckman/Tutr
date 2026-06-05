@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Button } from '@mui/material';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { getGoogleCalendarStatus } from '../../api/calendarApi';
 import { getAnalyticsSummary, getEarnings } from '../../api/analyticsApi';
@@ -75,10 +76,16 @@ export function DashboardLayout() {
           ))}
         </nav>
         <div className="hidden border-t border-sidebar-border p-4 md:block">
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50" onClick={() => { logout(); navigate('/login'); }}>
-            <Icon name="logout" className="h-5 w-5" />
+          <Button
+            fullWidth
+            variant="text"
+            color="inherit"
+            startIcon={<Icon name="logout" className="h-5 w-5" />}
+            sx={{ justifyContent: 'flex-start', color: 'var(--sidebar-foreground)' }}
+            onClick={() => { logout(); navigate('/login'); }}
+          >
             Logout
-          </button>
+          </Button>
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-auto pb-16 md:pb-0">
@@ -87,7 +94,7 @@ export function DashboardLayout() {
             <Icon name="graduation" className="h-7 w-7 text-primary" />
             <span className="text-lg font-semibold">Tutr</span>
           </Link>
-          <button className="button-secondary" onClick={() => { logout(); navigate('/login'); }}>Logout</button>
+          <Button variant="outlined" size="small" onClick={() => { logout(); navigate('/login'); }}>Logout</Button>
         </div>
         <Outlet />
       </main>
