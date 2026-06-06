@@ -22,3 +22,7 @@ export async function convertEnquiryToStudent(id: string, payload: ConvertEnquir
   const { data } = await api.post<{ enquiry: Enquiry; student: Student }>(`/enquiries/${id}/convert`, payload);
   return data;
 }
+
+export async function deleteEnquiry(id: string) {
+  await api.delete(`/enquiries/${id}`);
+}

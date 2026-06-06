@@ -76,6 +76,13 @@ public class EnquiryService {
         return new ConvertToStudentResponse(EnquiryResponse.from(enquiry), StudentResponse.from(students.save(student)));
     }
 
+    @Transactional
+    public void delete(User tutor, UUID id) {
+        Enquiry enquiry = enquiries.findByIdAndTutorProfileUser(id, tutor)
+                .orElseThrow(() -> new EntityNotFoundException("Enquiry not found"));
+        enquiries.delete(enquiry);
+    }
+
     private String conversionNotes(Enquiry enquiry, String tutorNotes) {
         StringBuilder notes = new StringBuilder();
         append(notes, tutorNotes);
