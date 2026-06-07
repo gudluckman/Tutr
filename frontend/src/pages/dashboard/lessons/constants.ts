@@ -1,7 +1,7 @@
 import type { LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../../types/lesson';
 import { toDateTimeLocal } from './lessonUtils';
 
-export const googleDeletionSyncStorageKey = 'tutr.googleDeletionSyncAt';
+export const googleCalendarSyncStorageKey = 'tutr.googleCalendarSyncAt';
 
 export const googleCalendarColors = [
   { id: '', label: 'Default', swatch: '#16a34a' },

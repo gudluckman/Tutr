@@ -23,4 +23,10 @@ public final class GoogleCalendarDtos {
             int deletedLessons
     ) {
     }
+
+    public record GoogleCalendarSyncResponse(
+            int updatedLessons,
+            int deletedLessons
+    ) {
+    }
 }

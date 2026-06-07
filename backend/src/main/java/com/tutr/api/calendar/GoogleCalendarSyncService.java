@@ -25,14 +25,18 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
+import static com.tutr.api.calendar.GoogleCalendarDtos.GoogleCalendarSyncResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -311,44 +315,43 @@ public class GoogleCalendarSyncService {
 
     @Transactional
     public int syncDeletedLessons(User tutor) {
+        return syncCalendarChanges(tutor).deletedLessons();
+    }
+
+    @Transactional
+    public GoogleCalendarSyncResponse syncCalendarChanges(User tutor) {
         Optional<GoogleCalendarConnection> connection = connectionFor(tutor);
         if (connection.isEmpty()) {
-            return 0;
+            return new GoogleCalendarSyncResponse(0, 0);
         }
 
         int deleted = 0;
+        int updated = 0;
         for (Lesson lesson : lessons.findByTutorAndGoogleEventIdIsNotNull(tutor)) {
-            if (googleEventExists(connection.get(), lesson.getGoogleEventId())) {
-                continue;
+            Optional<Map<String, Object>> event = googleEvent(connection.get(), lesson.getGoogleEventId());
+            if (event.isEmpty()) {
+                lessons.delete(lesson);
+                deleted++;
+            } else if (syncLessonFromGoogleEvent(lesson, event.get())) {
+                updated++;
             }
-            lessons.delete(lesson);
-            deleted++;
         }
         for (LessonSeries series : lessonSeries.findByTutorAndGoogleEventIdIsNotNull(tutor)) {
-            if (!googleEventExists(connection.get(), series.getGoogleEventId())) {
+            if (googleEvent(connection.get(), series.getGoogleEventId()).isEmpty()) {
                 List<Lesson> seriesLessons = lessons.findByLessonSeriesOrderByLessonDateAsc(series);
                 deleted += seriesLessons.size();
                 lessons.deleteByLessonSeries(series);
                 lessonSeries.delete(series);
                 continue;
             }
-
-            Set<Instant> deletedStarts = deletedSeriesOccurrenceStarts(connection.get(), series.getGoogleEventId());
-            if (deletedStarts.isEmpty()) {
-                continue;
-            }
-            for (Lesson lesson : lessons.findByLessonSeriesOrderByLessonDateAsc(series)) {
-                if (!deletedStarts.contains(lesson.getLessonDate())) {
-                    continue;
-                }
-                lessons.delete(lesson);
-                deleted++;
-            }
+            SeriesSyncResult result = syncSeriesInstances(connection.get(), series);
+            updated += result.updatedLessons();
+            deleted += result.deletedLessons();
         }
-        return deleted;
+        return new GoogleCalendarSyncResponse(updated, deleted);
     }
 
-    private boolean googleEventExists(GoogleCalendarConnection connection, String eventId) {
+    private Optional<Map<String, Object>> googleEvent(GoogleCalendarConnection connection, String eventId) {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> event = restClient.get()
@@ -356,13 +359,125 @@ public class GoogleCalendarSyncService {
                     .header("Authorization", "Bearer " + accessToken(connection))
                     .retrieve()
                     .body(Map.class);
-            return event == null || !"cancelled".equals(event.get("status"));
+            if (event == null || "cancelled".equals(event.get("status"))) {
+                return Optional.empty();
+            }
+            return Optional.of(event);
         } catch (HttpClientErrorException.NotFound | HttpClientErrorException.Gone ex) {
-            return false;
+            return Optional.empty();
         } catch (RuntimeException ex) {
             log.warn("Could not verify Google Calendar event {}", eventId, ex);
-            return true;
+            return Optional.of(Map.of());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private SeriesSyncResult syncSeriesInstances(GoogleCalendarConnection connection, LessonSeries series) {
+        Map<Instant, Lesson> lessonsByStart = new HashMap<>();
+        for (Lesson lesson : lessons.findByLessonSeriesOrderByLessonDateAsc(series)) {
+            lessonsByStart.put(lesson.getLessonDate(), lesson);
+        }
+
+        int updated = 0;
+        int deleted = 0;
+        String pageToken = null;
+        do {
+            try {
+                UriComponentsBuilder uri = UriComponentsBuilder
+                        .fromUriString("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}/instances")
+                        .queryParam("showDeleted", true)
+                        .queryParam("maxResults", 2500);
+                if (pageToken != null && !pageToken.isBlank()) {
+                    uri.queryParam("pageToken", pageToken);
+                }
+                Map<String, Object> response = restClient.get()
+                        .uri(uri.build(connection.getCalendarId(), series.getGoogleEventId()))
+                        .header("Authorization", "Bearer " + accessToken(connection))
+                        .retrieve()
+                        .body(Map.class);
+                Object items = response == null ? null : response.get("items");
+                if (items instanceof List<?> events) {
+                    for (Object item : events) {
+                        if (!(item instanceof Map<?, ?> rawEvent)) {
+                            continue;
+                        }
+                        Map<String, Object> event = (Map<String, Object>) rawEvent;
+                        Optional<Instant> originalStart = googleStartTime(event.get("originalStartTime"))
+                                .or(() -> googleStartTime(event.get("start")));
+                        if (originalStart.isEmpty()) {
+                            continue;
+                        }
+                        Lesson lesson = lessonsByStart.get(originalStart.get());
+                        if (lesson == null) {
+                            lesson = googleStartTime(event.get("start"))
+                                    .map(lessonsByStart::get)
+                                    .orElse(null);
+                        }
+                        if (lesson == null) {
+                            continue;
+                        }
+                        if ("cancelled".equals(event.get("status"))) {
+                            lessons.delete(lesson);
+                            lessonsByStart.remove(lesson.getLessonDate());
+                            deleted++;
+                        } else {
+                            Instant previousStart = lesson.getLessonDate();
+                            if (!syncLessonFromGoogleEvent(lesson, event)) {
+                                continue;
+                            }
+                            lessonsByStart.remove(originalStart.get());
+                            lessonsByStart.remove(previousStart);
+                            lessonsByStart.put(lesson.getLessonDate(), lesson);
+                            updated++;
+                        }
+                    }
+                }
+                pageToken = response == null || response.get("nextPageToken") == null
+                        ? null
+                        : String.valueOf(response.get("nextPageToken"));
+            } catch (RuntimeException ex) {
+                log.warn("Could not sync Google Calendar occurrences for series {}", series.getId(), ex);
+                return new SeriesSyncResult(updated, deleted);
+            }
+        } while (pageToken != null);
+        return new SeriesSyncResult(updated, deleted);
+    }
+
+    private boolean syncLessonFromGoogleEvent(Lesson lesson, Map<String, Object> event) {
+        Optional<Instant> start = googleStartTime(event.get("start"));
+        Optional<Instant> end = googleStartTime(event.get("end"));
+        if (start.isEmpty() || end.isEmpty() || !end.get().isAfter(start.get())) {
+            return false;
+        }
+
+        boolean changed = false;
+        int durationMinutes = Math.toIntExact(ChronoUnit.MINUTES.between(start.get(), end.get()));
+        if (!Objects.equals(lesson.getLessonDate(), start.get())) {
+            lesson.setLessonDate(start.get());
+            changed = true;
+        }
+        if (!Objects.equals(lesson.getDurationMinutes(), durationMinutes)) {
+            lesson.setDurationMinutes(durationMinutes);
+            changed = true;
+        }
+        Object summary = event.get("summary");
+        if (summary != null && !String.valueOf(summary).isBlank() && !Objects.equals(lesson.getTitle(), String.valueOf(summary))) {
+            lesson.setTitle(String.valueOf(summary));
+            changed = true;
+        }
+        Optional<String> meetLink = googleMeetLink(event);
+        if (meetLink.isPresent() && !Objects.equals(lesson.getGoogleMeetLink(), meetLink.get())) {
+            lesson.setGoogleMeetLink(meetLink.get());
+            changed = true;
+        }
+        if (changed) {
+            lesson.setGoogleSyncStatus(GoogleSyncStatus.SYNCED);
+            lesson.setGoogleSyncError(null);
+        }
+        return changed;
+    }
+
+    private record SeriesSyncResult(int updatedLessons, int deletedLessons) {
     }
 
     @SuppressWarnings("unchecked")

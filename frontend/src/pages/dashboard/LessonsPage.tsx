@@ -17,14 +17,14 @@ import {
 } from '@mui/material';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getGoogleCalendarAuthUrl, getGoogleCalendarStatus, syncGoogleCalendarDeletions } from '../../api/calendarApi';
+import { getGoogleCalendarAuthUrl, getGoogleCalendarStatus, syncGoogleCalendarChanges } from '../../api/calendarApi';
 import { createLesson, createRecurringLessons, deleteFollowingLessons, deleteLesson, deleteLessonSeries, listLessons, updateLesson, updateLessonStatuses } from '../../api/lessonApi';
 import { listStudents } from '../../api/studentApi';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { Lesson, LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../types/lesson';
 import type { Student } from '../../types/student';
-import { emptyLesson, emptyRecurring, googleDeletionSyncStorageKey, lessonStatusStyles, paymentStatusStyles } from './lessons/constants';
+import { emptyLesson, emptyRecurring, googleCalendarSyncStorageKey, lessonStatusStyles, paymentStatusStyles } from './lessons/constants';
 import { DeleteLessonDialog } from './lessons/DeleteLessonDialog';
 import { GoogleCalendarPanel } from './lessons/GoogleCalendarPanel';
 import { RecurringFields, SingleLessonFields } from './lessons/LessonFormFields';
@@ -122,11 +122,11 @@ export function LessonsPage() {
     },
   });
 
-  const syncDeletedGoogleEvents = useMutation({
-    mutationFn: syncGoogleCalendarDeletions,
+  const syncGoogleCalendar = useMutation({
+    mutationFn: syncGoogleCalendarChanges,
     onSuccess: (data) => {
-      sessionStorage.setItem(googleDeletionSyncStorageKey, String(Date.now()));
-      if (data.deletedLessons > 0) {
+      sessionStorage.setItem(googleCalendarSyncStorageKey, String(Date.now()));
+      if (data.updatedLessons > 0 || data.deletedLessons > 0) {
         queryClient.invalidateQueries({ queryKey: ['lessons'] });
       }
     },
@@ -136,11 +136,25 @@ export function LessonsPage() {
     if (!googleStatus.data?.connected) {
       return;
     }
-    const lastSyncAt = Number(sessionStorage.getItem(googleDeletionSyncStorageKey) ?? 0);
-    if (Date.now() - lastSyncAt > 5 * 60_000) {
-      syncDeletedGoogleEvents.mutate();
-    }
-  }, [googleStatus.data?.connected]);
+    const syncIfStale = () => {
+      const lastSyncAt = Number(sessionStorage.getItem(googleCalendarSyncStorageKey) ?? 0);
+      if (Date.now() - lastSyncAt > 60_000 && !syncGoogleCalendar.isPending) {
+        syncGoogleCalendar.mutate();
+      }
+    };
+    syncIfStale();
+    const interval = window.setInterval(syncIfStale, 60_000);
+    const syncOnFocus = () => {
+      if (document.visibilityState === 'visible') {
+        syncIfStale();
+      }
+    };
+    document.addEventListener('visibilitychange', syncOnFocus);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', syncOnFocus);
+    };
+  }, [googleStatus.data?.connected, syncGoogleCalendar.isPending]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -231,15 +245,15 @@ export function LessonsPage() {
         email={googleStatus.data?.googleAccountEmail}
         onConnect={() => connectGoogle.mutate()}
         isConnecting={connectGoogle.isPending}
-        onSyncDeletions={() => syncDeletedGoogleEvents.mutate()}
-        isSyncingDeletions={syncDeletedGoogleEvents.isPending}
+        onSyncChanges={() => syncGoogleCalendar.mutate()}
+        isSyncingChanges={syncGoogleCalendar.isPending}
       />
 
       <ErrorAlert className="mb-6" error={lessons.error} fallback="Could not load lessons. Please refresh the page." />
       <ErrorAlert className="mb-6" error={students.error} fallback="Could not load students for lesson scheduling. Please refresh the page." />
       <ErrorAlert className="mb-6" error={googleStatus.error} fallback="Could not load Google Calendar status. Please refresh the page." />
       <ErrorAlert className="mb-6" error={connectGoogle.error} fallback="Could not start Google Calendar connection. Please try again." />
-      <ErrorAlert className="mb-6" error={syncDeletedGoogleEvents.error} fallback="Could not sync deleted Google Calendar events. Please try again." />
+      <ErrorAlert className="mb-6" error={syncGoogleCalendar.error} fallback="Could not sync Google Calendar changes. Please try again." />
       <ErrorAlert className="mb-6" error={remove.error} fallback="Could not delete the lesson. Please try again." />
       <ErrorAlert className="mb-6" error={updateStatuses.error} fallback="Could not update the lesson status. Please try again." />
 

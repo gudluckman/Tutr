@@ -62,6 +62,11 @@ public class GoogleCalendarController {
         return new GoogleCalendarDeletionSyncResponse(googleCalendar.syncDeletedLessons(user));
     }
 
+    @PostMapping("/sync")
+    GoogleCalendarSyncResponse syncEvents(@AuthenticationPrincipal User user) {
+        return googleCalendar.syncCalendarChanges(user);
+    }
+
     @GetMapping("/callback")
     ResponseEntity<Void> callback(@RequestParam(required = false) String code,
                                   @RequestParam(required = false) String state,

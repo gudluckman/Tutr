@@ -6,16 +6,16 @@ export function GoogleCalendarPanel({
   email,
   onConnect,
   isConnecting,
-  onSyncDeletions,
-  isSyncingDeletions,
+  onSyncChanges,
+  isSyncingChanges,
 }: {
   configured: boolean;
   connected: boolean;
   email?: string | null;
   onConnect: () => void;
   isConnecting: boolean;
-  onSyncDeletions: () => void;
-  isSyncingDeletions: boolean;
+  onSyncChanges: () => void;
+  isSyncingChanges: boolean;
 }) {
   const panelTone = connected
     ? { borderColor: '#bbf7d0', bgcolor: '#f0fdf4', color: '#14532d' }
@@ -34,8 +34,8 @@ export function GoogleCalendarPanel({
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           {connected && (
-            <Button variant="outlined" color="success" onClick={onSyncDeletions} disabled={isSyncingDeletions} sx={{ bgcolor: 'rgba(255,255,255,0.72)' }}>
-            Sync deletions
+            <Button variant="outlined" color="success" onClick={onSyncChanges} disabled={isSyncingChanges} sx={{ bgcolor: 'rgba(255,255,255,0.72)' }}>
+            Sync changes
             </Button>
           )}
           <Button variant={connected ? 'contained' : 'outlined'} color="success" onClick={onConnect} disabled={!configured || connected || isConnecting}>
