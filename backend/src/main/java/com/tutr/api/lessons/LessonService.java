@@ -51,7 +51,7 @@ public class LessonService {
         CalendarDetails previousCalendarDetails = CalendarDetails.from(lesson);
         apply(tutor, lesson, request);
         if (!previousCalendarDetails.equals(CalendarDetails.from(lesson))) {
-            googleCalendar.syncLesson(lesson);
+            googleCalendar.syncLesson(lesson, previousCalendarDetails.lessonDate());
         }
         return LessonResponse.from(lesson);
     }
@@ -113,11 +113,19 @@ public class LessonService {
             lesson.setInviteEmail(series.getInviteEmail());
             lesson.setGoogleColorId(series.getGoogleColorId());
             lesson.setGoogleExtraReminderMinutes(series.getGoogleExtraReminderMinutes());
-            lesson.setGoogleSyncEnabled(false);
+            lesson.setGoogleSyncEnabled(series.isGoogleSyncEnabled());
             created.add(lesson);
         }
         lessons.saveAll(created);
         googleCalendar.syncSeries(series);
+        if (series.getGoogleSyncStatus() == GoogleSyncStatus.SYNCED) {
+            created.forEach(lesson -> {
+                lesson.setGoogleCalendarId(series.getGoogleCalendarId());
+                lesson.setGoogleMeetLink(series.getGoogleMeetLink());
+                lesson.setGoogleSyncStatus(GoogleSyncStatus.SYNCED);
+                lesson.setGoogleSyncError(null);
+            });
+        }
         return RecurringLessonResponse.from(series, created);
     }
 
