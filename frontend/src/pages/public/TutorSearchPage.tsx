@@ -146,6 +146,7 @@ function SearchTextField({
 
 function TutorResultCard({ tutor }: { tutor: TutorProfile }) {
   const imageUrl = assetUrl(tutor.profileImageUrl);
+  const teachingOfferings = tutor.teachingOfferings ?? [];
   return (
     <Paper
       component="article"
@@ -170,7 +171,7 @@ function TutorResultCard({ tutor }: { tutor: TutorProfile }) {
           )}
         </Box>
       </Stack>
-      {(tutor.online || tutor.tutorYear) && (
+      {(tutor.online || tutor.tutorYear || teachingOfferings.length > 0) && (
         <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
           {tutor.online && (
             <Chip
@@ -180,7 +181,11 @@ function TutorResultCard({ tutor }: { tutor: TutorProfile }) {
               sx={{ bgcolor: 'rgba(22, 163, 74, 0.1)', color: 'success.dark' }}
             />
           )}
-          {tutor.tutorYear && <Chip label={tutor.tutorYear} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />}
+          {teachingOfferings.slice(0, 4).map((offering) => (
+            <Chip key={`${offering.tutorYear}-${offering.subject}`} label={`${offering.tutorYear} ${offering.subject}`} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />
+          ))}
+          {teachingOfferings.length === 0 && tutor.tutorYear && <Chip label={tutor.tutorYear} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />}
+          {teachingOfferings.length > 4 && <Chip label={`+${teachingOfferings.length - 4} more`} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />}
         </Stack>
       )}
       <Typography variant="body2" sx={{ mb: 1.5 }}>{tutor.headline || 'Independent tutor on Tutr'}</Typography>

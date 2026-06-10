@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Button, Checkbox, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogContent, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
 import type { ChangeEvent, ReactNode } from 'react';
 import { FormEvent, useEffect, useState } from 'react';
 import { assetUrl } from '../../api/client';
@@ -8,11 +8,18 @@ import { Avatar } from '../../components/ui/Avatar';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { TutorProfile } from '../../types/tutor';
+import { subjectGroupsForYear, teachingYearOptions, type SubjectGroup } from './profileTeachingOptions';
+import { australianUniversityOptions, otherUniversityOption } from './profileUniversityOptions';
+
+type TeachingOfferingItem = NonNullable<TutorProfile['teachingOfferings']>[number];
 
 export function ProfileSettingsPage() {
   const queryClient = useQueryClient();
   const profile = useQuery({ queryKey: ['profile'], queryFn: getTutorProfile });
   const [form, setForm] = useState<TutorProfile | null>(null);
+  const [subjectModalOpen, setSubjectModalOpen] = useState(false);
+  const [activeTeachingYear, setActiveTeachingYear] = useState('Year 12');
+  const [universityOtherMode, setUniversityOtherMode] = useState(false);
   const save = useMutation({
     mutationFn: (payload: TutorProfile) => updateTutorProfile(payload),
     onSuccess: (data) => {
@@ -29,7 +36,10 @@ export function ProfileSettingsPage() {
   });
 
   useEffect(() => {
-    if (profile.data) setForm(profile.data);
+    if (profile.data) {
+      setForm(profile.data);
+      setUniversityOtherMode(profile.data.university ? !australianUniversityOptions.includes(profile.data.university) : false);
+    }
   }, [profile.data]);
 
   function submit(event: FormEvent) {
@@ -53,6 +63,41 @@ export function ProfileSettingsPage() {
   }
 
   const imageUrl = assetUrl(form.profileImageUrl);
+  const teachingOfferings = validTeachingOfferings(form);
+  const activeSubjectGroups = subjectGroupsForYear(activeTeachingYear);
+  const selectedUniversity = universitySelectValue(form.university, universityOtherMode);
+
+  function toggleSubject(year: string, subject: string, checked: boolean) {
+    setForm((current) => {
+      if (!current) return current;
+      const offerings = validTeachingOfferings(current);
+      const exists = offerings.some((offering) => offering.tutorYear === year && offering.subject === subject);
+      const nextOfferings = checked && !exists
+        ? [...offerings, { tutorYear: year, subject }]
+        : offerings.filter((offering) => offering.tutorYear !== year || offering.subject !== subject);
+      return { ...current, teachingOfferings: sortTeachingOfferings(nextOfferings) };
+    });
+  }
+
+  function toggleSubjectGroup(year: string, group: SubjectGroup, checked: boolean) {
+    setForm((current) => {
+      if (!current) return current;
+      const offerings = validTeachingOfferings(current);
+      const groupSubjects = new Set(group.subjects);
+      const retained = offerings.filter((offering) => offering.tutorYear !== year || !groupSubjects.has(offering.subject));
+      const nextOfferings = checked
+        ? [...retained, ...group.subjects.map((subject) => ({ tutorYear: year, subject }))]
+        : retained;
+      return { ...current, teachingOfferings: sortTeachingOfferings(nextOfferings) };
+    });
+  }
+
+  function removeOffering(year: string, subject: string) {
+    setForm((current) => current ? {
+      ...current,
+      teachingOfferings: validTeachingOfferings(current).filter((offering) => offering.tutorYear !== year || offering.subject !== subject),
+    } : current);
+  }
 
   return (
     <Box sx={{ maxWidth: 896, p: { xs: 2, sm: 4 } }}>
@@ -92,7 +137,6 @@ export function ProfileSettingsPage() {
             </Stack>
             <ProfileTextField label="Headline" value={form.headline ?? ''} placeholder="e.g. VCE Maths specialist | ATAR 99.5" onChange={(value) => setForm({ ...form, headline: value })} />
             <ProfileTextField label="Location" value={form.location ?? ''} placeholder="e.g. Sydney, NSW" onChange={(value) => setForm({ ...form, location: value })} />
-            <ProfileTextField label="Tutor year" value={form.tutorYear ?? ''} placeholder="e.g. Year 10" onChange={(value) => setForm({ ...form, tutorYear: value })} />
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
               <ProfileTextField label="Min hourly rate (AUD)" type="number" value={String(form.hourlyRateMin ?? 0)} onChange={(value) => setForm({ ...form, hourlyRateMin: Number(value) })} />
               <ProfileTextField label="Max hourly rate (AUD)" type="number" value={String(form.hourlyRateMax ?? 0)} onChange={(value) => setForm({ ...form, hourlyRateMax: Number(value) })} />
@@ -100,10 +144,116 @@ export function ProfileSettingsPage() {
           </Stack>
         </SettingsPanel>
 
+        <SettingsPanel title="Years and subjects">
+          <Stack sx={{ gap: 2 }}>
+            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+              {teachingOfferings.map((offering) => (
+                <Chip
+                  key={teachingOfferingKey(offering.tutorYear, offering.subject)}
+                  label={`${offering.tutorYear} ${offering.subject}`}
+                  onDelete={() => removeOffering(offering.tutorYear, offering.subject)}
+                  sx={{ bgcolor: '#f5f5f5' }}
+                />
+              ))}
+              {teachingOfferings.length === 0 && <Typography variant="body2" color="text.secondary">No years or subjects selected yet.</Typography>}
+            </Stack>
+            <Box>
+              <Button type="button" variant="outlined" startIcon={<Icon name="plus" className="h-4 w-4" />} onClick={() => setSubjectModalOpen(true)}>
+                Choose years and subjects
+              </Button>
+            </Box>
+          </Stack>
+        </SettingsPanel>
+
+        <Dialog open={subjectModalOpen} onClose={() => setSubjectModalOpen(false)} fullWidth maxWidth="lg" aria-labelledby="teaching-subjects-title">
+          <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2.5 }}>
+              <Box>
+                <Typography id="teaching-subjects-title" variant="h5" sx={{ fontWeight: 700 }}>What subjects do you tutor?</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Select a year, then tick every subject you teach for that year.
+                </Typography>
+              </Box>
+              <Button type="button" variant="outlined" onClick={() => setSubjectModalOpen(false)}>Done</Button>
+            </Stack>
+
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', display: 'flex', gap: 0.5, overflowX: 'auto' }}>
+              {teachingYearOptions.map((year) => (
+                <Button
+                  key={year}
+                  type="button"
+                  color="inherit"
+                  onClick={() => setActiveTeachingYear(year)}
+                  sx={{
+                    borderBottom: activeTeachingYear === year ? 2 : 0,
+                    borderColor: 'primary.main',
+                    borderRadius: 0,
+                    color: activeTeachingYear === year ? 'text.primary' : 'text.secondary',
+                    flexShrink: 0,
+                    fontWeight: activeTeachingYear === year ? 600 : 400,
+                    minWidth: 84,
+                    px: 1.5,
+                    textTransform: 'none',
+                  }}
+                >
+                  {year}
+                </Button>
+              ))}
+            </Box>
+
+            <Box sx={{ maxHeight: { xs: '62vh', sm: '66vh' }, overflowY: 'auto', pt: 3 }}>
+              <Box sx={{ display: 'grid', gap: { xs: 2, sm: 3 }, gridTemplateColumns: activeSubjectGroups.length === 1 ? '1fr' : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' } }}>
+                {activeSubjectGroups.map((group) => {
+                  const allSelected = group.subjects.every((subject) => hasTeachingOffering(teachingOfferings, activeTeachingYear, subject));
+                  return (
+                    <Box key={group.label}>
+                      <FormControlLabel
+                        control={<Checkbox checked={allSelected} onChange={(event) => toggleSubjectGroup(activeTeachingYear, group, event.target.checked)} />}
+                        label={<Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{group.label}</Typography>}
+                        sx={{ m: 0 }}
+                      />
+                      <Box sx={{ display: 'grid', gap: 0.5, gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fit, minmax(260px, 1fr))' }, mt: 0.5 }}>
+                        {group.subjects.map((subject) => (
+                          <FormControlLabel
+                            key={subject}
+                            control={<Checkbox checked={hasTeachingOffering(teachingOfferings, activeTeachingYear, subject)} onChange={(event) => toggleSubject(activeTeachingYear, subject, event.target.checked)} />}
+                            label={<Typography variant="body2">{subject}</Typography>}
+                            sx={{ m: 0, py: 0.25 }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+          </DialogContent>
+        </Dialog>
+
         <SettingsPanel title="Education">
           <Stack sx={{ gap: 2 }}>
-            <ProfileTextField label="University" value={form.university ?? ''} onChange={(value) => setForm({ ...form, university: value })} />
+            <Autocomplete
+              options={australianUniversityOptions}
+              value={selectedUniversity}
+              onChange={(_, value) => {
+                const isOther = value === otherUniversityOption;
+                setUniversityOtherMode(isOther);
+                setForm({ ...form, university: isOther ? '' : value ?? '' });
+              }}
+              renderInput={(params) => <TextField {...params} label="University" />}
+            />
+            {selectedUniversity === otherUniversityOption && (
+              <ProfileTextField label="Other university or institution" value={form.university ?? ''} onChange={(value) => setForm({ ...form, university: value })} />
+            )}
             <ProfileTextField label="Degree" value={form.degree ?? ''} onChange={(value) => setForm({ ...form, degree: value })} />
+            <ProfileTextField label="High school" value={form.highSchool ?? ''} placeholder="e.g. North Sydney Boys High School" onChange={(value) => setForm({ ...form, highSchool: value })} />
+            <ProfileTextField
+              label="Year finished high school"
+              type="number"
+              value={String(form.highSchoolFinishedYear ?? '')}
+              placeholder="e.g. 2024"
+              onChange={(value) => setForm({ ...form, highSchoolFinishedYear: value ? Number(value) : null })}
+            />
             <ProfileTextField label="ATAR" value={form.atar ?? ''} placeholder="e.g. 99.5" onChange={(value) => setForm({ ...form, atar: value })} />
           </Stack>
         </SettingsPanel>
@@ -160,6 +310,45 @@ function SettingsPanel({ title, children }: { title: string; children: ReactNode
       {children}
     </Paper>
   );
+}
+
+function validTeachingOfferings(profile: TutorProfile) {
+  const offerings = profile.teachingOfferings?.length
+    ? profile.teachingOfferings
+    : profile.tutorYear
+      ? [{ tutorYear: profile.tutorYear, subject: '' }]
+      : [];
+  return offerings.filter((offering) => offering.tutorYear?.trim() && offering.subject?.trim());
+}
+
+function sortTeachingOfferings(offerings: TeachingOfferingItem[]) {
+  const unique = new Map<string, TeachingOfferingItem>();
+  offerings
+    .filter((offering) => offering.tutorYear.trim() && offering.subject.trim())
+    .forEach((offering) => unique.set(teachingOfferingKey(offering.tutorYear, offering.subject), offering));
+  return Array.from(unique.values()).sort((a, b) => (
+    teachingYearSortIndex(a.tutorYear) - teachingYearSortIndex(b.tutorYear)
+    || a.subject.localeCompare(b.subject)
+  ));
+}
+
+function hasTeachingOffering(offerings: TeachingOfferingItem[], tutorYear: string, subject: string) {
+  return offerings.some((offering) => offering.tutorYear === tutorYear && offering.subject === subject);
+}
+
+function teachingOfferingKey(tutorYear: string, subject: string) {
+  return `${tutorYear}:${subject}`;
+}
+
+function teachingYearSortIndex(tutorYear: string) {
+  const index = teachingYearOptions.indexOf(tutorYear);
+  return index === -1 ? teachingYearOptions.length : index;
+}
+
+function universitySelectValue(university: string | undefined, otherMode: boolean) {
+  if (otherMode) return otherUniversityOption;
+  if (!university) return null;
+  return australianUniversityOptions.includes(university) ? university : otherUniversityOption;
 }
 
 function ProfileTextField({ label, value, onChange, type = 'text', placeholder, required = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; placeholder?: string; required?: boolean }) {

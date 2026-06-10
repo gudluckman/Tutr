@@ -34,6 +34,7 @@ export function TutorProfilePage() {
   if (tutor.isError) return <ErrorAlert className="m-4 sm:m-8" error={tutor.error} fallback="Could not load this tutor profile. Please try again." />;
   if (!tutor.data) return <div className="px-4 py-8 text-muted-foreground">Tutor profile not found.</div>;
   const imageUrl = assetUrl(tutor.data.profileImageUrl);
+  const teachingOfferings = tutor.data.teachingOfferings ?? [];
 
   return (
     <div className="min-h-screen bg-background px-4 py-8">
@@ -72,12 +73,31 @@ export function TutorProfilePage() {
                   {tutor.data.bio || 'This tutor is still filling out their profile.'}
                 </p>
               </ProfileSection>
+              {(teachingOfferings.length > 0 || tutor.data.tutorYear) && (
+                <ProfileSection title="Years and subjects">
+                  <div className="flex flex-wrap gap-2">
+                    {teachingOfferings.map((offering) => (
+                      <span key={`${offering.tutorYear}-${offering.subject}`} className="rounded bg-accent px-2.5 py-1 text-sm text-accent-foreground">
+                        {offering.tutorYear} {offering.subject}
+                      </span>
+                    ))}
+                    {teachingOfferings.length === 0 && tutor.data.tutorYear && (
+                      <span className="rounded bg-accent px-2.5 py-1 text-sm text-accent-foreground">{tutor.data.tutorYear}</span>
+                    )}
+                  </div>
+                </ProfileSection>
+              )}
               <ProfileSection title="Education">
                 <div className="flex items-start gap-3">
                   <Icon name="graduation" className="mt-0.5 h-5 w-5 text-primary" />
                   <div>
                     <p className="font-medium text-foreground">{tutor.data.university || 'Education details coming soon'}</p>
                     {tutor.data.degree && <p className="text-muted-foreground">{tutor.data.degree}</p>}
+                    {tutor.data.highSchool && (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        High school: {tutor.data.highSchool}{tutor.data.highSchoolFinishedYear ? ` (${tutor.data.highSchoolFinishedYear})` : ''}
+                      </p>
+                    )}
                     {tutor.data.atar && <p className="mt-1 text-sm text-muted-foreground">ATAR: {tutor.data.atar}</p>}
                   </div>
                 </div>

@@ -3,6 +3,7 @@ package com.tutr.api.tutors;
 import com.tutr.api.common.BaseEntity;
 import com.tutr.api.users.User;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -12,6 +13,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Getter
 @Setter
@@ -32,11 +34,16 @@ public class TutorProfile extends BaseEntity {
     private String bio;
     private String location;
     private String tutorYear;
+    @Convert(converter = TeachingOfferingsConverter.class)
+    @Column(columnDefinition = "TEXT")
+    private List<TeachingOffering> teachingOfferings = List.of();
     private boolean isOnline;
     private BigDecimal hourlyRateMin;
     private BigDecimal hourlyRateMax;
     private String university;
     private String degree;
+    private String highSchool;
+    private Integer highSchoolFinishedYear;
     private String atar;
     private String profileImageUrl;
     private boolean isPublic;

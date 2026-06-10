@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 public final class TutorDtos {
@@ -17,11 +18,14 @@ public final class TutorDtos {
             String bio,
             String location,
             String tutorYear,
+            List<TeachingOffering> teachingOfferings,
             boolean online,
             BigDecimal hourlyRateMin,
             BigDecimal hourlyRateMax,
             String university,
             String degree,
+            String highSchool,
+            Integer highSchoolFinishedYear,
             String atar,
             String profileImageUrl,
             @JsonProperty("isPublic")
@@ -37,11 +41,14 @@ public final class TutorDtos {
             String bio,
             String location,
             String tutorYear,
+            List<TeachingOffering> teachingOfferings,
             boolean online,
             BigDecimal hourlyRateMin,
             BigDecimal hourlyRateMax,
             String university,
             String degree,
+            String highSchool,
+            Integer highSchoolFinishedYear,
             String atar,
             String profileImageUrl,
             @JsonProperty("isPublic")
@@ -56,11 +63,14 @@ public final class TutorDtos {
                     profile.getBio(),
                     profile.getLocation(),
                     profile.getTutorYear(),
+                    profile.getTeachingOfferings(),
                     profile.isOnline(),
                     profile.getHourlyRateMin(),
                     profile.getHourlyRateMax(),
                     profile.getUniversity(),
                     profile.getDegree(),
+                    profile.getHighSchool(),
+                    profile.getHighSchoolFinishedYear(),
                     profile.getAtar(),
                     profile.getProfileImageUrl(),
                     profile.isPublic()

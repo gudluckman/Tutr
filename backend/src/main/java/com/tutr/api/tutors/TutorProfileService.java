@@ -18,9 +18,8 @@ public class TutorProfileService {
 
     public List<TutorProfileResponse> searchPublic(String subject, String location, String tutorYear, Boolean online) {
         return profiles.findByIsPublicTrue().stream()
-                .filter(profile -> matchesSubject(profile, subject))
+                .filter(profile -> matchesTeachingFilters(profile, subject, tutorYear))
                 .filter(profile -> matchesLocation(profile, location))
-                .filter(profile -> matchesTutorYear(profile, tutorYear))
                 .filter(profile -> online == null || profile.isOnline() == online)
                 .map(TutorProfileResponse::from)
                 .toList();
@@ -61,11 +60,14 @@ public class TutorProfileService {
         profile.setBio(request.bio());
         profile.setLocation(request.location());
         profile.setTutorYear(request.tutorYear());
+        profile.setTeachingOfferings(teachingOfferings(request.teachingOfferings()));
         profile.setOnline(request.online());
         profile.setHourlyRateMin(request.hourlyRateMin());
         profile.setHourlyRateMax(request.hourlyRateMax());
         profile.setUniversity(request.university());
         profile.setDegree(request.degree());
+        profile.setHighSchool(request.highSchool());
+        profile.setHighSchoolFinishedYear(request.highSchoolFinishedYear());
         profile.setAtar(request.atar());
         profile.setProfileImageUrl(request.profileImageUrl());
         profile.setPublic(request.isPublic());
@@ -89,7 +91,7 @@ public class TutorProfileService {
             return true;
         }
         String term = subject.toLowerCase(Locale.ROOT);
-        return contains(profile.getHeadline(), term) || contains(profile.getBio(), term);
+        return hasMatchingOffering(profile, term, null) || contains(profile.getHeadline(), term) || contains(profile.getBio(), term);
     }
 
     private boolean matchesLocation(TutorProfile profile, String location) {
@@ -103,10 +105,54 @@ public class TutorProfileService {
         if (tutorYear == null || tutorYear.isBlank()) {
             return true;
         }
-        return contains(profile.getTutorYear(), tutorYear.toLowerCase(Locale.ROOT));
+        return hasMatchingOffering(profile, null, tutorYear.toLowerCase(Locale.ROOT))
+                || contains(profile.getTutorYear(), tutorYear.toLowerCase(Locale.ROOT));
+    }
+
+    private boolean matchesTeachingFilters(TutorProfile profile, String subject, String tutorYear) {
+        String subjectTerm = subject == null || subject.isBlank() ? null : subject.toLowerCase(Locale.ROOT);
+        String yearTerm = tutorYear == null || tutorYear.isBlank() ? null : tutorYear.toLowerCase(Locale.ROOT);
+        if (subjectTerm == null && yearTerm == null) {
+            return true;
+        }
+        if (hasMatchingOffering(profile, subjectTerm, yearTerm)) {
+            return true;
+        }
+        if (profile.getTeachingOfferings() != null && !profile.getTeachingOfferings().isEmpty()) {
+            return false;
+        }
+        return matchesSubject(profile, subject) && matchesTutorYear(profile, tutorYear);
     }
 
     private boolean contains(String value, String term) {
         return value != null && value.toLowerCase(Locale.ROOT).contains(term);
+    }
+
+    private List<TeachingOffering> teachingOfferings(List<TeachingOffering> requestedOfferings) {
+        if (requestedOfferings == null) {
+            return List.of();
+        }
+        return requestedOfferings.stream()
+                .filter(offering -> offering != null && !isBlank(offering.tutorYear()) && !isBlank(offering.subject()))
+                .map(offering -> new TeachingOffering(offering.tutorYear().trim(), offering.subject().trim()))
+                .distinct()
+                .limit(30)
+                .toList();
+    }
+
+    private boolean hasMatchingOffering(TutorProfile profile, String subject, String tutorYear) {
+        List<TeachingOffering> offerings = profile.getTeachingOfferings();
+        if (offerings == null || offerings.isEmpty()) {
+            return false;
+        }
+        return offerings.stream().anyMatch(offering -> {
+            boolean subjectMatches = subject == null || contains(offering.subject(), subject);
+            boolean yearMatches = tutorYear == null || contains(offering.tutorYear(), tutorYear);
+            return subjectMatches && yearMatches;
+        });
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }
