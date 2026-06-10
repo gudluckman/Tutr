@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Button } from '@mui/material';
+import { Button, Tooltip } from '@mui/material';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { getGoogleCalendarStatus } from '../../api/calendarApi';
 import { getAnalyticsSummary, getEarnings } from '../../api/analyticsApi';
@@ -19,6 +19,13 @@ const navItems: Array<[string, string, IconName]> = [
   ['/dashboard/enquiries', 'Enquiries', 'mail'],
   ['/dashboard/profile', 'Profile', 'user'],
 ];
+// Beta Feedback
+const feedbackEmail = import.meta.env.VITE_FEEDBACK_EMAIL as string | undefined;
+const githubIssuesUrl = import.meta.env.VITE_GITHUB_ISSUES_URL ?? 'https://github.com/gudluckman/Tutr/issues/new/choose';
+const feedbackHref = feedbackEmail
+  ? `mailto:${feedbackEmail}?subject=${encodeURIComponent('Tutr beta feedback')}`
+  : githubIssuesUrl;
+const feedbackTooltip = 'If you spot an issue with this app, help report it to the owner.';
 
 export function DashboardLayout() {
   const navigate = useNavigate();
@@ -76,6 +83,17 @@ export function DashboardLayout() {
           ))}
         </nav>
         <div className="hidden border-t border-sidebar-border p-4 md:block">
+          <Tooltip title={feedbackTooltip} placement="right" arrow>
+            <a
+              href={feedbackHref}
+              target={feedbackEmail ? undefined : '_blank'}
+              rel={feedbackEmail ? undefined : 'noreferrer'}
+              className="mb-2 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent/50"
+            >
+              <Icon name="alert" className="h-5 w-5 shrink-0" />
+              Beta feedback
+            </a>
+          </Tooltip>
           <Button
             fullWidth
             variant="text"
@@ -94,7 +112,14 @@ export function DashboardLayout() {
             <Icon name="graduation" className="h-7 w-7 text-primary" />
             <span className="text-lg font-semibold">Tutr</span>
           </Link>
-          <Button variant="outlined" size="small" onClick={() => { logout(); navigate('/login'); }}>Logout</Button>
+          <div className="flex items-center gap-2">
+            <Tooltip title={feedbackTooltip} arrow>
+              <Button component="a" href={feedbackHref} target={feedbackEmail ? undefined : '_blank'} rel={feedbackEmail ? undefined : 'noreferrer'} variant="text" size="small">
+                Feedback
+              </Button>
+            </Tooltip>
+            <Button variant="outlined" size="small" onClick={() => { logout(); navigate('/login'); }}>Logout</Button>
+          </div>
         </div>
         <Outlet />
       </main>

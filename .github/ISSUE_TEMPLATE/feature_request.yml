@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an improvement for the Tutr beta.
+title: "[Feedback]: "
+labels: ["enhancement", "beta-feedback"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like improved?
+      description: Describe the workflow, missing feature, or confusing moment.
+      placeholder: It would help if...
+    validations:
+      required: true
+  - type: textarea
+    id: current-workaround
+    attributes:
+      label: Current workaround
+      description: How are you handling this today, if at all?
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context
+      description: Add screenshots, examples, or notes if useful.
+    validations:
+      required: false

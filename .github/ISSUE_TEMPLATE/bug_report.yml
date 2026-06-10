@@ -1,0 +1,38 @@
+name: Bug report
+description: Report something broken or confusing in the Tutr beta.
+title: "[Bug]: "
+labels: ["bug", "beta-feedback"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Tell us what went wrong and what you expected instead.
+      placeholder: I tried to...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the clicks or actions that led to the issue.
+      placeholder: |
+        1. Go to...
+        2. Click...
+        3. See...
+    validations:
+      required: false
+  - type: input
+    id: browser
+    attributes:
+      label: Browser/device
+      placeholder: Chrome on Mac, Safari on iPhone, etc.
+    validations:
+      required: false
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or extra context
+      description: Add a screenshot if it helps explain the issue.
+    validations:
+      required: false

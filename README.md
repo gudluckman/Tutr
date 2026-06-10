@@ -94,6 +94,17 @@ cp frontend/.env.example frontend/.env
 The `local` backend profile uses the Docker Postgres defaults unless you create `backend/.env.local`.
 The Docker Postgres data is temporary in this repo, so local test rows disappear when the container is recreated.
 
+## Beta Feedback
+
+Beta testers can report bugs or product feedback from the dashboard sidebar. Set these frontend env vars to control where those links go:
+
+```text
+VITE_FEEDBACK_EMAIL=<your-feedback-email>
+VITE_GITHUB_ISSUES_URL=https://github.com/gudluckman/Tutr/issues/new/choose
+```
+
+If `VITE_FEEDBACK_EMAIL` is set, the app opens an email draft with the subject `Tutr beta feedback`. If it is not set, the feedback link opens the GitHub issue template chooser.
+
 ## Supabase / Managed Postgres
 
 If you provision a Supabase (or Neon, RDS, etc.) Postgres instance for beta/production, set the following environment variables for the backend before starting it. Your provider will give you the host, port, database, username and password.
