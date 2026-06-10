@@ -15,15 +15,15 @@ export function RevenueBars({ data, period }: { data: RevenuePoint[]; period: Re
           {Array.from({ length: 4 }).map((_, index) => <span key={index} className="border-t border-dashed border-border/70" />)}
         </div>
         {data.length === 0 && <p className="self-center text-sm text-muted-foreground">No expected lesson income yet.</p>}
-        {data.map((item) => (
+        {data.map((item, index) => (
           <div key={item.period} className="relative z-10 flex min-w-10 flex-1 flex-col items-center gap-2 hover:z-30 focus-within:z-30">
             <div className="group relative flex min-h-0 w-full flex-1 items-end" tabIndex={0} aria-label={`${periodLabel(item.period, period)} expected income ${money.format(item.expectedRevenue)}, paid ${money.format(item.paidRevenue)}, outstanding ${money.format(item.outstandingRevenue)}`}>
-              <div className="pointer-events-none absolute left-1/2 top-3 z-20 min-w-52 -translate-x-1/2 translate-y-1 rounded-lg border border-border bg-card p-3 text-xs text-card-foreground opacity-0 shadow-lg transition-all duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus:translate-y-0 group-focus:opacity-100">
+              <div className={`pointer-events-none absolute top-3 z-20 min-w-52 translate-y-1 rounded-lg border border-border bg-card p-3 text-xs text-card-foreground opacity-0 shadow-lg transition-all duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus:translate-y-0 group-focus:opacity-100 ${tooltipPosition(index, data.length)}`}>
                 <p className="mb-2 border-b border-border pb-2 text-sm font-semibold">{periodLabel(item.period, period)}</p>
                 <TooltipRow colour="bg-neutral-300" label="Expected income" value={money.format(item.expectedRevenue)} />
                 <TooltipRow colour="bg-primary" label="Paid" value={money.format(item.paidRevenue)} />
                 <TooltipRow colour="bg-yellow-300" label="Outstanding" value={money.format(item.outstandingRevenue)} />
-                <span className="absolute left-1/2 top-full h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-border bg-card" />
+                <span className={`absolute top-full h-2.5 w-2.5 -translate-y-1/2 rotate-45 border-b border-r border-border bg-card ${tooltipArrowPosition(index, data.length)}`} />
               </div>
               <div
                 className="flex w-full flex-col-reverse overflow-hidden rounded-t-lg shadow-sm transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-md group-focus:-translate-y-1 group-focus:shadow-md"
@@ -53,6 +53,20 @@ function TooltipRow({ colour, label, value }: { colour: string; label: string; v
       <span className="ml-auto pl-3 font-semibold text-foreground">{value}</span>
     </div>
   );
+}
+
+function tooltipPosition(index: number, total: number) {
+  if (total <= 1) return 'left-1/2 -translate-x-1/2';
+  if (index === 0) return 'left-0';
+  if (index === total - 1) return 'right-0';
+  return 'left-1/2 -translate-x-1/2';
+}
+
+function tooltipArrowPosition(index: number, total: number) {
+  if (total <= 1) return 'left-1/2 -translate-x-1/2';
+  if (index === 0) return 'left-8';
+  if (index === total - 1) return 'right-8';
+  return 'left-1/2 -translate-x-1/2';
 }
 
 function barHeight(amount: number, max: number) {
