@@ -433,15 +433,18 @@ public class GoogleCalendarSyncService {
 
     @SuppressWarnings("unchecked")
     private SeriesSyncResult syncSeriesInstances(GoogleCalendarConnection connection, LessonSeries series) {
+        List<Lesson> seriesLessons = lessons.findByLessonSeriesOrderByLessonDateAsc(series);
         Map<Instant, Lesson> lessonsByStart = new HashMap<>();
         Map<String, Lesson> lessonsByGoogleEventId = new HashMap<>();
-        for (Lesson lesson : lessons.findByLessonSeriesOrderByLessonDateAsc(series)) {
+        for (Lesson lesson : seriesLessons) {
             lessonsByStart.put(lesson.getLessonDate(), lesson);
             if (lesson.getGoogleEventId() != null && !lesson.getGoogleEventId().isBlank()) {
                 lessonsByGoogleEventId.put(lesson.getGoogleEventId(), lesson);
             }
         }
 
+        Set<Lesson> matchedLessons = new HashSet<>();
+        List<Map<String, Object>> unmatchedActiveEvents = new ArrayList<>();
         int updated = 0;
         int deleted = 0;
         String pageToken = null;
@@ -482,8 +485,12 @@ public class GoogleCalendarSyncService {
                                     .orElse(null);
                         }
                         if (lesson == null) {
+                            if (!"cancelled".equals(event.get("status"))) {
+                                unmatchedActiveEvents.add(event);
+                            }
                             continue;
                         }
+                        matchedLessons.add(lesson);
                         if ("cancelled".equals(event.get("status"))) {
                             lessons.delete(lesson);
                             lessonsByStart.remove(lesson.getLessonDate());
@@ -514,7 +521,33 @@ public class GoogleCalendarSyncService {
                 return new SeriesSyncResult(updated, deleted);
             }
         } while (pageToken != null);
+
+        List<Lesson> unmatchedLessons = seriesLessons.stream()
+                .filter(lesson -> !matchedLessons.contains(lesson))
+                .filter(lesson -> lessonsByStart.containsKey(lesson.getLessonDate()))
+                .toList();
+        unmatchedActiveEvents.sort((a, b) -> googleComparableStart(a).compareTo(googleComparableStart(b)));
+        for (int index = 0; index < unmatchedActiveEvents.size() && index < unmatchedLessons.size(); index++) {
+            Map<String, Object> event = unmatchedActiveEvents.get(index);
+            Lesson lesson = unmatchedLessons.get(index);
+            String eventId = event.get("id") == null ? null : String.valueOf(event.get("id"));
+            if (!syncLessonFromGoogleEvent(lesson, event)) {
+                continue;
+            }
+            if (eventId != null && !eventId.isBlank()) {
+                lesson.setGoogleEventId(eventId);
+            }
+            lesson.setGoogleCalendarId(connection.getCalendarId());
+            lesson.setGoogleSyncEnabled(true);
+            updated++;
+        }
         return new SeriesSyncResult(updated, deleted);
+    }
+
+    private Instant googleComparableStart(Map<String, Object> event) {
+        return googleStartTime(event.get("originalStartTime"))
+                .or(() -> googleStartTime(event.get("start")))
+                .orElse(Instant.MAX);
     }
 
     @SuppressWarnings("unchecked")
