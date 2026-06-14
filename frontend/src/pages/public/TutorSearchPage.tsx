@@ -20,6 +20,7 @@ import { initials } from '../../components/ui/Avatar';
 import { Icon } from '../../components/ui/Icon';
 import { Link as RouterLink } from 'react-router-dom';
 import type { TutorProfile } from '../../types/tutor';
+import { teachingYearLabel } from '../dashboard/profileTeachingOptions';
 
 export function TutorSearchPage() {
   const [filters, setFilters] = useState({ subject: '', location: '', tutorYear: '', online: false });
@@ -72,8 +73,8 @@ export function TutorSearchPage() {
               sx={{ flex: { xs: '1 1 100%', md: '1 1 0' }, minWidth: { md: 0 } }}
             />
             <SearchTextField
-              label="Tutor year"
-              placeholder="e.g. Year 10"
+              label="Student year level"
+              placeholder="e.g. Year 10 or Primary"
               value={filters.tutorYear}
               onChange={(value) => setFilters({ ...filters, tutorYear: value })}
               sx={{ flex: { xs: '1 1 100%', md: '0.75 1 0' }, minWidth: { md: 0 } }}
@@ -182,9 +183,9 @@ function TutorResultCard({ tutor }: { tutor: TutorProfile }) {
             />
           )}
           {teachingOfferings.slice(0, 4).map((offering) => (
-            <Chip key={`${offering.tutorYear}-${offering.subject}`} label={`${offering.tutorYear} ${offering.subject}`} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />
+            <Chip key={`${offering.tutorYear}-${offering.subject}`} label={`${teachingYearLabel(offering.tutorYear)} - ${offering.subject}`} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />
           ))}
-          {teachingOfferings.length === 0 && tutor.tutorYear && <Chip label={tutor.tutorYear} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />}
+          {teachingOfferings.length === 0 && tutor.tutorYear && <Chip label={teachingYearLabel(tutor.tutorYear)} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />}
           {teachingOfferings.length > 4 && <Chip label={`+${teachingOfferings.length - 4} more`} size="small" sx={{ bgcolor: '#f5f5f5', color: 'text.secondary' }} />}
         </Stack>
       )}

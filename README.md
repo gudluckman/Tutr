@@ -37,7 +37,7 @@ Local and dev databases start empty after Flyway migrations. To load repeatable 
 The seed script resets local app tables and loads demo tutors, students, enquiries, lessons, and analytics data. You can then log into the seeded tutor dashboard with:
 
 ```text
-Email: sarah.chen@tutr.dev
+Email: edwlaw12@gmail.com
 Password: password123
 ```
 

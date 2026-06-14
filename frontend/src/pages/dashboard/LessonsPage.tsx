@@ -7,10 +7,13 @@ import {
   DialogContent,
   FormControl,
   IconButton,
+  InputAdornment,
+  InputLabel,
   MenuItem,
   Paper,
   Select,
   Stack,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -36,16 +39,36 @@ import {
   calendarRangeLabel,
   calendarViewDate,
   isSameDay,
+  isGeneratedLessonTitle,
   lessonAmount,
   lessonTimeRange,
-  lessonTitle,
   startOfDay,
   startOfMonthGrid,
   startOfWeek,
+  searchMatcher,
   statusLabel,
+  subjectOptionsForStudent,
   timeLabel,
   toDateTimeLocal,
 } from './lessons/lessonUtils';
+
+type LessonFiltersState = {
+  search: string;
+  studentId: string;
+  schoolYear: string;
+  subject: string;
+  lessonStatus: string;
+  paymentStatus: string;
+};
+
+const emptyLessonFilters: LessonFiltersState = {
+  search: '',
+  studentId: '',
+  schoolYear: '',
+  subject: '',
+  lessonStatus: '',
+  paymentStatus: '',
+};
 
 export function LessonsPage() {
   const queryClient = useQueryClient();
@@ -59,11 +82,15 @@ export function LessonsPage() {
   const [deletingLesson, setDeletingLesson] = useState<Lesson | null>(null);
   const [form, setForm] = useState<LessonPayload>(emptyLesson);
   const [recurringForm, setRecurringForm] = useState<RecurringLessonPayload>(emptyRecurring);
+  const [filters, setFilters] = useState<LessonFiltersState>(emptyLessonFilters);
 
   const lessons = useQuery({ queryKey: ['lessons'], queryFn: listLessons });
   const students = useQuery({ queryKey: ['students'], queryFn: listStudents });
   const googleStatus = useQuery({ queryKey: ['google-calendar-status'], queryFn: getGoogleCalendarStatus });
   const calendarError = searchParams.get('calendarError');
+  const lessonList = lessons.data ?? [];
+  const studentList = students.data ?? [];
+  const filteredLessons = useMemo(() => filterLessons(lessonList, studentList, filters), [filters, lessonList, studentList]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -315,12 +342,21 @@ export function LessonsPage() {
         </Paper>
       )}
 
+      <LessonFilters
+        filters={filters}
+        lessons={lessonList}
+        students={studentList}
+        resultCount={filteredLessons.length}
+        onChange={setFilters}
+        onClear={() => setFilters(emptyLessonFilters)}
+      />
+
       {workspaceView === 'CALENDAR' ? (
         <LessonCalendar
           view={calendarView}
           date={calendarDate}
-          lessons={lessons.data ?? []}
-          students={students.data ?? []}
+          lessons={filteredLessons}
+          students={studentList}
           isUpdating={(lesson) => updateStatuses.isPending && updateStatuses.variables?.id === lesson.id}
           onViewChange={setCalendarView}
           onDateChange={setCalendarDate}
@@ -331,13 +367,118 @@ export function LessonsPage() {
         />
       ) : (
         <LessonTable
-          lessons={lessons.data ?? []}
+          lessons={filteredLessons}
           onEdit={edit}
           onDelete={removeLesson}
         />
       )}
     </Box>
   );
+}
+
+function LessonFilters({
+  filters,
+  lessons,
+  students,
+  resultCount,
+  onChange,
+  onClear,
+}: {
+  filters: LessonFiltersState;
+  lessons: Lesson[];
+  students: Student[];
+  resultCount: number;
+  onChange: (filters: LessonFiltersState) => void;
+  onClear: () => void;
+}) {
+  const studentOptions = useMemo(() => students
+    .map((student) => ({ value: student.id, label: student.name }))
+    .sort((a, b) => a.label.localeCompare(b.label)), [students]);
+  const schoolYearOptions = useMemo(() => uniqueOptions(students.map((student) => student.schoolYear)), [students]);
+  const subjectOptions = useMemo(() => uniqueOptions(students.flatMap((student) => subjectOptionsForStudent(student))), [students]);
+  const hasFilters = Object.values(filters).some(Boolean);
+
+  return (
+    <Paper variant="outlined" sx={{ mb: 3, p: { xs: 2, sm: 2.5 }, borderRadius: 2 }}>
+      <Stack direction={{ xs: 'column', lg: 'row' }} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, gap: 1.5 }}>
+        <TextField
+          label="Search lessons"
+          value={filters.search}
+          onChange={(event) => onChange({ ...filters, search: event.target.value })}
+          placeholder="Student, title, subject, notes"
+          size="small"
+          sx={{ flex: { lg: '1 1 260px' } }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Icon name="search" className="h-4 w-4" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        <LessonFilterSelect label="Student" value={filters.studentId} onChange={(studentId) => onChange({ ...filters, studentId })} options={studentOptions} placeholder="All students" />
+        <LessonFilterSelect label="Year level" value={filters.schoolYear} onChange={(schoolYear) => onChange({ ...filters, schoolYear })} options={schoolYearOptions} placeholder="All year levels" />
+        <LessonFilterSelect label="Subject(s)" value={filters.subject} onChange={(subject) => onChange({ ...filters, subject })} options={subjectOptions} placeholder="All subjects" />
+        <LessonFilterSelect label="Lesson status" value={filters.lessonStatus} onChange={(lessonStatus) => onChange({ ...filters, lessonStatus })} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].map((value) => ({ value, label: statusLabel(value) }))} placeholder="All statuses" />
+        <LessonFilterSelect label="Payment" value={filters.paymentStatus} onChange={(paymentStatus) => onChange({ ...filters, paymentStatus })} options={['UNPAID', 'PAID', 'PARTIAL'].map((value) => ({ value, label: statusLabel(value) }))} placeholder="All payments" />
+      </Stack>
+      <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.5, mt: 1.5 }}>
+        <Typography variant="body2" color="text.secondary">{resultCount} of {lessons.length} lessons shown</Typography>
+        <Button variant="outlined" color="inherit" size="small" onClick={onClear} disabled={!hasFilters} sx={{ alignSelf: { sm: 'flex-end' } }}>
+          Clear filters
+        </Button>
+      </Stack>
+    </Paper>
+  );
+}
+
+function LessonFilterSelect({ label, value, onChange, options, placeholder }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }>; placeholder: string }) {
+  return (
+    <FormControl size="small" sx={{ minWidth: { lg: 156 } }}>
+      <InputLabel>{label}</InputLabel>
+      <Select label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+        <MenuItem value="">{placeholder}</MenuItem>
+        {options.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
+      </Select>
+    </FormControl>
+  );
+}
+
+function filterLessons(lessons: Lesson[], students: Student[], filters: LessonFiltersState) {
+  const studentsById = new Map(students.map((student) => [student.id, student]));
+  const matcher = searchMatcher(filters.search);
+  return lessons
+    .filter((lesson) => !filters.studentId || lesson.studentId === filters.studentId)
+    .filter((lesson) => !filters.lessonStatus || lesson.status === filters.lessonStatus)
+    .filter((lesson) => !filters.paymentStatus || lesson.paymentStatus === filters.paymentStatus)
+    .filter((lesson) => {
+      const student = studentsById.get(lesson.studentId);
+      return !filters.schoolYear || student?.schoolYear === filters.schoolYear;
+    })
+    .filter((lesson) => {
+      const student = studentsById.get(lesson.studentId);
+      return !filters.subject || subjectOptionsForStudent(student).includes(filters.subject);
+    })
+    .filter((lesson) => {
+      if (!filters.search) return true;
+      const student = studentsById.get(lesson.studentId);
+      return matcher.test([
+        lesson.title,
+        lesson.studentName,
+        lesson.lessonNotes,
+        lesson.homework,
+        student?.schoolYear,
+        student?.subject,
+      ].filter(Boolean).join(' '));
+    });
+}
+
+function uniqueOptions(values: Array<string | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => ({ value, label: value }));
 }
 
 function lessonLinksForForm(lesson: Lesson) {
@@ -414,6 +555,7 @@ function LessonCalendar({
         <DailyCalendar
           date={date}
           lessons={sortedLessons}
+          students={students}
           isUpdating={isUpdating}
           onEdit={onEdit}
           onDelete={onDelete}
@@ -451,6 +593,7 @@ function LessonCalendar({
 function DailyCalendar({
   date,
   lessons,
+  students,
   isUpdating,
   onEdit,
   onDelete,
@@ -459,6 +602,7 @@ function DailyCalendar({
 }: {
   date: Date;
   lessons: Lesson[];
+  students: Student[];
   isUpdating: (lesson: Lesson) => boolean;
   onEdit: (lesson: Lesson) => void;
   onDelete: (lesson: Lesson) => void;
@@ -477,6 +621,7 @@ function DailyCalendar({
           <DailyLessonCard
             key={lesson.id}
             lesson={lesson}
+            student={students.find((student) => student.id === lesson.studentId)}
             isUpdating={isUpdating(lesson)}
             onEdit={() => onEdit(lesson)}
             onDelete={() => onDelete(lesson)}
@@ -492,6 +637,7 @@ function DailyCalendar({
 
 function DailyLessonCard({
   lesson,
+  student,
   isUpdating,
   onEdit,
   onDelete,
@@ -499,6 +645,7 @@ function DailyLessonCard({
   onUpdatePaymentStatus,
 }: {
   lesson: Lesson;
+  student?: Student;
   isUpdating: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -506,6 +653,7 @@ function DailyLessonCard({
   onUpdatePaymentStatus: (status: PaymentStatus) => void;
 }) {
   const palette = calendarPaymentPalette(lesson);
+  const customLinks = lessonLinksForDisplay(lesson);
 
   return (
     <article className="relative overflow-hidden rounded-lg border border-border bg-card p-4 pl-5 sm:p-5 sm:pl-6">
@@ -540,8 +688,26 @@ function DailyLessonCard({
             <Icon name="user" className="h-4 w-4" />
             {lesson.studentName}
           </p>
+          {(student?.schoolYear || student?.subject) && (
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              {student.schoolYear && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Icon name="graduation" className="h-4 w-4" />
+                  <span>Year level: {student.schoolYear}</span>
+                </span>
+              )}
+              {student.subject && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Icon name="book" className="h-4 w-4" />
+                  <span>{student.subject}</span>
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex gap-1 self-end sm:self-auto">
+          <VideoCallButton lesson={lesson} />
+          <AttachedLinkButtons lesson={lesson} />
           <IconButton size="small" type="button" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`}>
             <Icon name="edit" className="h-4 w-4" />
           </IconButton>
@@ -556,6 +722,18 @@ function DailyLessonCard({
           <strong className="text-foreground">{lesson.hourlyRate}/hr</strong>
           <span>({lessonAmount(lesson)} total)</span>
         </span>
+        {lesson.googleMeetLink && (
+          <a className="inline-flex items-center gap-2 font-medium text-primary hover:underline" href={lesson.googleMeetLink} target="_blank" rel="noreferrer">
+            <Icon name="video" className="h-4 w-4" />
+            Video call
+          </a>
+        )}
+        {customLinks.map((link, index) => (
+          <a key={`${link.label}-${link.url}-${index}`} className="inline-flex items-center gap-2 font-medium text-primary hover:underline" href={link.url} target="_blank" rel="noreferrer">
+            <Icon name="link" className="h-4 w-4" />
+            {link.label || 'Link'}
+          </a>
+        ))}
         {lesson.lessonNotes && <span className="inline-flex items-center gap-2"><Icon name="edit" className="h-4 w-4" />{lesson.lessonNotes}</span>}
         {lesson.homework && <span className="inline-flex items-center gap-2"><Icon name="book" className="h-4 w-4" />{lesson.homework}</span>}
       </div>
@@ -735,6 +913,8 @@ function MonthlyLessonModal({
   onUpdateStatus: (status: LessonStatus) => void;
   onUpdatePaymentStatus: (status: PaymentStatus) => void;
 }) {
+  const customLinks = lessonLinksForDisplay(lesson);
+
   return (
     <Dialog
       open
@@ -759,6 +939,8 @@ function MonthlyLessonModal({
             <LessonSummaryLine icon="calendar" value={new Date(lesson.lessonDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })} />
             <LessonSummaryLine icon="clock" value={lessonTimeRange(lesson)} />
             <LessonSummaryLine icon="dollar" value={`${lesson.hourlyRate}/hr (${lessonAmount(lesson)} total)`} />
+            {lesson.googleMeetLink && <LessonVideoCallLine lesson={lesson} />}
+            {customLinks.map((link, index) => <LessonAttachedLinkLine key={`${link.label}-${link.url}-${index}`} link={link} />)}
             <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <CalendarStatusSelect
                 ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
@@ -807,6 +989,37 @@ function MonthlyLessonModal({
           >
             Close
           </Button>
+          {lesson.googleMeetLink && (
+            <Button
+              component="a"
+              href={lesson.googleMeetLink}
+              target="_blank"
+              rel="noreferrer"
+              variant="outlined"
+              type="button"
+              size="small"
+              startIcon={<Icon name="video" className="h-3.5 w-3.5" />}
+              sx={{ borderColor: '#bbf7d0', color: '#166534', minHeight: 36, textTransform: 'none', '&:hover': { borderColor: '#86efac', bgcolor: '#f0fdf4' } }}
+            >
+              Join call
+            </Button>
+          )}
+          {customLinks.map((link, index) => (
+            <Button
+              key={`${link.label}-${link.url}-${index}`}
+              component="a"
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              variant="outlined"
+              type="button"
+              size="small"
+              startIcon={<Icon name="link" className="h-3.5 w-3.5" />}
+              sx={{ borderColor: '#d4d4d4', color: '#525252', minHeight: 36, textTransform: 'none', '&:hover': { borderColor: '#a3a3a3', bgcolor: '#eeeeee' } }}
+            >
+              {link.label || 'Link'}
+            </Button>
+          ))}
           <Button
             variant="contained"
             type="button"
@@ -821,6 +1034,88 @@ function MonthlyLessonModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function VideoCallButton({ lesson, compact = false }: { lesson: Lesson; compact?: boolean }) {
+  if (!lesson.googleMeetLink) return null;
+
+  return (
+    <IconButton
+      component="a"
+      href={lesson.googleMeetLink}
+      target="_blank"
+      rel="noreferrer"
+      size="small"
+      type="button"
+      aria-label={`Open video call for ${lesson.title || 'lesson'}`}
+      title="Open video call"
+      onClick={(event) => event.stopPropagation()}
+      sx={compact ? { p: 0.25, color: 'success.main' } : { color: 'success.main' }}
+    >
+      <Icon name="video" className={compact ? 'h-3 w-3' : 'h-4 w-4'} />
+    </IconButton>
+  );
+}
+
+function AttachedLinkButtons({ lesson, compact = false }: { lesson: Lesson; compact?: boolean }) {
+  const customLinks = lessonLinksForDisplay(lesson);
+  if (customLinks.length === 0) return null;
+
+  return (
+    <>
+      {customLinks.map((link, index) => (
+        <IconButton
+          key={`${link.label}-${link.url}-${index}`}
+          component="a"
+          href={link.url}
+          target="_blank"
+          rel="noreferrer"
+          size="small"
+          type="button"
+          aria-label={`Open ${link.label || 'attached link'} for ${lesson.title || 'lesson'}`}
+          title={link.label || 'Open attached link'}
+          onClick={(event) => event.stopPropagation()}
+          sx={compact ? { p: 0.25, color: 'text.secondary' } : { color: 'text.secondary' }}
+        >
+          <Icon name="link" className={compact ? 'h-3 w-3' : 'h-4 w-4'} />
+        </IconButton>
+      ))}
+    </>
+  );
+}
+
+function LessonVideoCallLine({ lesson }: { lesson: Lesson }) {
+  if (!lesson.googleMeetLink) return null;
+
+  return (
+    <Stack component="a" href={lesson.googleMeetLink} target="_blank" rel="noreferrer" direction="row" sx={{ alignItems: 'center', color: 'success.dark', gap: 1.25, minWidth: 0, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+      <Box sx={{ color: 'success.dark', display: 'flex' }}>
+        <Icon name="video" className="h-4 w-4" />
+      </Box>
+      <Typography variant="body2" sx={{ color: 'success.dark', fontWeight: 500, minWidth: 0 }}>Join video call</Typography>
+    </Stack>
+  );
+}
+
+function LessonAttachedLinkLine({ link }: { link: { label: string; url: string } }) {
+  return (
+    <Stack component="a" href={link.url} target="_blank" rel="noreferrer" direction="row" sx={{ alignItems: 'center', color: 'text.secondary', gap: 1.25, minWidth: 0, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+      <Box sx={{ color: 'text.secondary', display: 'flex' }}>
+        <Icon name="link" className="h-4 w-4" />
+      </Box>
+      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, minWidth: 0 }}>{link.label || 'Link'}</Typography>
+    </Stack>
+  );
+}
+
+function lessonLinksForDisplay(lesson: Lesson) {
+  if (lesson.lessonLinks?.length) {
+    return lesson.lessonLinks.filter((link) => link.url?.trim());
+  }
+  if (lesson.miroBoardUrl) {
+    return [{ label: 'Board', url: lesson.miroBoardUrl }];
+  }
+  return [];
 }
 
 function LessonSummaryLine({ icon, value }: { icon: 'calendar' | 'clock' | 'dollar'; value: string }) {
@@ -861,6 +1156,7 @@ function CalendarLessonCard({
   onUpdatePaymentStatus: (status: PaymentStatus) => void;
 }) {
   const palette = calendarPaymentPalette(lesson);
+  const customLinks = lessonLinksForDisplay(lesson);
 
   return (
     <article className="group relative overflow-hidden rounded-lg border border-border/80 bg-muted/45 p-2.5 pl-3.5 text-xs shadow-sm transition-all hover:border-border hover:bg-muted/70 hover:shadow">
@@ -874,6 +1170,8 @@ function CalendarLessonCard({
             </span>
           </div>
           <div className="flex shrink-0 opacity-60 transition-opacity group-hover:opacity-100">
+            <VideoCallButton lesson={lesson} compact />
+            <AttachedLinkButtons lesson={lesson} compact />
             <IconButton size="small" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`} sx={{ p: 0.25 }}>
               <Icon name="edit" className="h-3 w-3" />
             </IconButton>
@@ -884,7 +1182,7 @@ function CalendarLessonCard({
         </div>
 
         <div className="min-w-0">
-          {student && lesson.title === lessonTitle(student) ? (
+          {student && isGeneratedLessonTitle(student, lesson.title) ? (
             <div className="space-y-1">
               <p className="whitespace-normal break-words font-semibold leading-tight text-foreground">{student.name}</p>
               {student.schoolYear && (
@@ -907,6 +1205,19 @@ function CalendarLessonCard({
               <WeeklyLessonRate lesson={lesson} />
             </div>
           )}
+          {lesson.googleMeetLink && (
+            <a className="mt-1 flex items-start gap-1 text-[10px] font-medium leading-tight text-primary hover:underline" href={lesson.googleMeetLink} target="_blank" rel="noreferrer">
+              <Icon name="video" className="h-3 w-3 shrink-0" />
+              <span>Meeting</span>
+            </a>
+          )}
+          {customLinks.slice(0, 2).map((link, index) => (
+            <a key={`${link.label}-${link.url}-${index}`} className="mt-1 flex items-start gap-1 text-[10px] font-medium leading-tight text-primary hover:underline" href={link.url} target="_blank" rel="noreferrer">
+              <Icon name="link" className="h-3 w-3 shrink-0" />
+              <span className="truncate">{link.label || 'Link'}</span>
+            </a>
+          ))}
+          {customLinks.length > 2 && <p className="mt-1 text-[10px] leading-tight text-muted-foreground">+{customLinks.length - 2} more links</p>}
         </div>
       </div>
       {lesson.lessonSeriesId && <span className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Recurring</span>}

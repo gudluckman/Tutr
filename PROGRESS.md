@@ -265,6 +265,80 @@ structure.
 The scheduled keep-awake job is less noisy and more resilient when the Render
 backend needs extra time to wake after being idle.
 
+## 2026-06-08 - Google Calendar Inbound Sync
+
+### Completed
+
+- Added backend support for syncing changed Google Calendar events back into
+  Tutr lessons.
+- Added an explicit calendar sync endpoint and frontend API helper.
+- Updated the lessons page to run calendar sync when connected, including a
+  short session-based cooldown to avoid excessive repeated syncs.
+- Refined the Google Calendar panel copy and sync status handling.
+
+### Outcome
+
+Tutors could make schedule changes in Google Calendar and have those updates
+flow back into Tutr, reducing the chance that the app and calendar drift apart.
+
+## 2026-06-10 - Profile Structure And Beta Feedback
+
+### Completed
+
+- Hardened automatic Google Calendar event syncing so linked lesson updates
+  and calendar metadata stay more reliable.
+- Fixed revenue chart tooltip clipping so financial details remain readable.
+- Added structured tutor teaching-offering data, including backend persistence,
+  DTO support, and Flyway migrations.
+- Added high school and university education fields to tutor profiles.
+- Added dashboard profile controls for teaching years, subjects, high school,
+  university, study area, and ATAR.
+- Surfaced the new education and teaching-offering details on public tutor
+  profile and search pages.
+- Added GitHub issue templates for beta bug reports and feature requests.
+- Added a beta feedback link to the dashboard and documented the feedback flow
+  in the README.
+
+### Outcome
+
+Tutor profiles became more structured and searchable, earnings charts were
+easier to read, calendar sync was safer, and beta testers gained a clearer path
+for reporting problems and feature ideas.
+
+## 2026-06-14 - Subject Selection And Lesson Filtering
+
+### Completed
+
+- Renamed tutor-facing labels from "years" to clearer "year levels" across the
+  dashboard and public tutor pages.
+- Added searchable year-level and subject selection in profile settings, with
+  clearer labels for primary-school offerings.
+- Reworked student setup so tutors choose a year level first, then select one
+  or more subjects from the matching subject list.
+- Updated lesson title generation so multi-subject students can use a specific
+  lesson subject while still allowing custom lesson titles.
+- Added lesson filters for search, student, year level, subject, lesson status,
+  and payment status across the calendar and table workspaces.
+- Surfaced student year level, subjects, Google Meet links, and attached lesson
+  links in daily, weekly, and monthly lesson views.
+- Updated local seed data and README login details from the Sarah Chen sample
+  account to the Edward Lukman sample account.
+- Pointed dashboard brand links back to the tutor dashboard instead of the
+  public home page.
+
+### Outcome
+
+Tutors can manage students with multiple subjects more cleanly, narrow lesson
+views to the work they need, and jump into lesson calls or attached resources
+directly from the calendar.
+
+### Next
+
+- Run a frontend typecheck/build after the UI changes are finalized.
+- Smoke-test student creation, profile subject selection, lesson filtering, and
+  lesson link display on desktop and mobile.
+- Consider whether the lesson filters should persist between dashboard visits.
+
 ## Current Focus
 
 - Stabilize the beta deployment and verify the full hosted workflow after each

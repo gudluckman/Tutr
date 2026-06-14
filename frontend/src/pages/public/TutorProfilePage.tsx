@@ -8,6 +8,7 @@ import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { EnquiryPayload, PreferredMode } from '../../types/enquiry';
 import type { TutorProfile } from '../../types/tutor';
+import { teachingYearLabel } from '../dashboard/profileTeachingOptions';
 
 export function TutorProfilePage() {
   const { slug = '' } = useParams();
@@ -74,15 +75,15 @@ export function TutorProfilePage() {
                 </p>
               </ProfileSection>
               {(teachingOfferings.length > 0 || tutor.data.tutorYear) && (
-                <ProfileSection title="Years and subjects">
+                <ProfileSection title="Year levels and subjects">
                   <div className="flex flex-wrap gap-2">
                     {teachingOfferings.map((offering) => (
                       <span key={`${offering.tutorYear}-${offering.subject}`} className="rounded bg-accent px-2.5 py-1 text-sm text-accent-foreground">
-                        {offering.tutorYear} {offering.subject}
+                        {teachingYearLabel(offering.tutorYear)} - {offering.subject}
                       </span>
                     ))}
                     {teachingOfferings.length === 0 && tutor.data.tutorYear && (
-                      <span className="rounded bg-accent px-2.5 py-1 text-sm text-accent-foreground">{tutor.data.tutorYear}</span>
+                      <span className="rounded bg-accent px-2.5 py-1 text-sm text-accent-foreground">{teachingYearLabel(tutor.data.tutorYear)}</span>
                     )}
                   </div>
                 </ProfileSection>
@@ -130,7 +131,7 @@ export function TutorProfilePage() {
                   <FormField label="Parent name *"><input className="input" name="parentName" required /></FormField>
                   <FormField label="Parent email *"><input className="input" name="parentEmail" type="email" required /></FormField>
                   <FormField label="Phone"><input className="input" name="parentPhone" /></FormField>
-                  <FormField label="Student year"><input className="input" name="studentYear" placeholder="e.g. Year 11" /></FormField>
+                  <FormField label="Student year level"><input className="input" name="studentYear" placeholder="e.g. Year 11" /></FormField>
                   <FormField label="Subject"><input className="input" name="subject" placeholder="e.g. VCE Maths Methods" /></FormField>
                   <FormField label="Preferred location"><input className="input" name="preferredLocation" placeholder="e.g. Carlton, VIC" /></FormField>
                   <FormField label="Preferred mode">

@@ -13,6 +13,14 @@ export const teachingYearOptions = [
   'Year 12',
 ];
 
+const teachingYearLabels: Record<string, string> = {
+  'Year 1-6': 'Primary school (Years 1-6)',
+};
+
+export function teachingYearLabel(year: string) {
+  return teachingYearLabels[year] ?? year;
+}
+
 const primarySubjectGroups: SubjectGroup[] = [
   { label: 'Primary subjects', subjects: ['English', 'Mathematics', 'Science and Technology', 'Human Society and its Environment (HSIE)', 'Creative Arts', 'Personal Development, Health and Physical Education (PDHPE)'] },
 ];

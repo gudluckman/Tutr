@@ -11,7 +11,7 @@ RESTART IDENTITY CASCADE;
 
 INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
 VALUES
-  ('11111111-1111-1111-1111-111111111111', 'sarah.chen@tutr.dev', '$2a$10$KGrLOavRO.z/x9pyyYuMfe.eUe2dCKwdaq2Qzx2CEuYogX0.YodF.', 'TUTOR', '2024-01-15T00:00:00Z', now()),
+  ('11111111-1111-1111-1111-111111111111', 'edwlaw12@gmail.com', '$2a$10$KGrLOavRO.z/x9pyyYuMfe.eUe2dCKwdaq2Qzx2CEuYogX0.YodF.', 'TUTOR', '2024-01-15T00:00:00Z', now()),
   ('22222222-2222-2222-2222-222222222222', 'james.wilson@tutr.dev', '$2a$10$KGrLOavRO.z/x9pyyYuMfe.eUe2dCKwdaq2Qzx2CEuYogX0.YodF.', 'TUTOR', now(), now()),
   ('33333333-3333-3333-3333-333333333333', 'maya.patel@tutr.dev', '$2a$10$KGrLOavRO.z/x9pyyYuMfe.eUe2dCKwdaq2Qzx2CEuYogX0.YodF.', 'TUTOR', now(), now())
 ON CONFLICT (id) DO UPDATE SET
@@ -44,8 +44,8 @@ VALUES
   (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
     '11111111-1111-1111-1111-111111111111',
-    'Sarah Chen',
-    'sarah-chen',
+    'Edward Lukman',
+    'edward-lukman',
     'VCE Maths & Physics specialist | ATAR 99.5',
     'I am a final-year engineering student who helps senior students build confidence in Maths Methods, Specialist Maths, and Physics. My lessons focus on clear foundations, exam technique, and targeted practice between sessions.',
     'Melbourne, VIC',
@@ -564,7 +564,7 @@ ON CONFLICT (id) DO UPDATE SET
   homework = EXCLUDED.homework,
   updated_at = now();
 
--- Sarah has tutored since 2024. These linked lessons make the overview useful
+-- Edward has tutored since 2024. These linked lessons make the overview useful
 -- at daily, weekly, monthly, and yearly resolutions while keeping the seed repeatable.
 INSERT INTO lessons (
   id,
@@ -863,7 +863,7 @@ VALUES
     '0434 567 890',
     'Year 12',
     'VCE Physics',
-    'Hi Sarah, my daughter needs help preparing for her physics exam. She is struggling with mechanics and would like weekly sessions.',
+    'Hi Edward, my daughter needs help preparing for her physics exam. She is struggling with mechanics and would like weekly sessions.',
     'Carlton, VIC',
     'BOTH',
     'NEW',
@@ -893,7 +893,7 @@ VALUES
     '0418 234 765',
     'Year 10',
     'Mathematics',
-    'Hi Sarah, we are looking for some extra support for our son with algebra and problem solving. He would prefer in-person sessions after school if you have availability.',
+    'Hi Edward, we are looking for some extra support for our son with algebra and problem solving. He would prefer in-person sessions after school if you have availability.',
     'Brunswick, VIC',
     'IN_PERSON',
     'NEW',

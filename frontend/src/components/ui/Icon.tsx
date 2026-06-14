@@ -12,6 +12,7 @@ import {
   Globe,
   GraduationCap,
   LayoutDashboard,
+  Link2,
   LogOut,
   Mail,
   MapPin,
@@ -24,6 +25,7 @@ import {
   Upload,
   User,
   Users,
+  Video,
   X,
   type LucideIcon,
   type LucideProps,
@@ -41,6 +43,7 @@ const icons = {
   globe: Globe,
   search: Search,
   dashboard: LayoutDashboard,
+  link: Link2,
   calendar: Calendar,
   logout: LogOut,
   plus: Plus,
@@ -55,6 +58,7 @@ const icons = {
   phone: Phone,
   clock: Clock,
   book: BookOpen,
+  video: Video,
   historicalStats: ChartNoAxesCombined,
 } satisfies Record<string, LucideIcon>;
 

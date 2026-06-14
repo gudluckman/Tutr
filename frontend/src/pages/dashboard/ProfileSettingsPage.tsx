@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogContent, FormControlLabel, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogContent, FormControlLabel, InputAdornment, Paper, Stack, TextField, Typography } from '@mui/material';
 import type { ChangeEvent, ReactNode } from 'react';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { assetUrl } from '../../api/client';
 import { getTutorProfile, updateTutorProfile, uploadTutorProfileImage } from '../../api/tutorApi';
 import { Avatar } from '../../components/ui/Avatar';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { TutorProfile } from '../../types/tutor';
-import { subjectGroupsForYear, teachingYearOptions, type SubjectGroup } from './profileTeachingOptions';
+import { subjectGroupsForYear, teachingYearLabel, teachingYearOptions, type SubjectGroup } from './profileTeachingOptions';
 import { australianUniversityOptions, otherUniversityOption } from './profileUniversityOptions';
 
 type TeachingOfferingItem = NonNullable<TutorProfile['teachingOfferings']>[number];
@@ -19,6 +19,7 @@ export function ProfileSettingsPage() {
   const [form, setForm] = useState<TutorProfile | null>(null);
   const [subjectModalOpen, setSubjectModalOpen] = useState(false);
   const [activeTeachingYear, setActiveTeachingYear] = useState('Year 12');
+  const [subjectSearch, setSubjectSearch] = useState('');
   const [universityOtherMode, setUniversityOtherMode] = useState(false);
   const save = useMutation({
     mutationFn: (payload: TutorProfile) => updateTutorProfile(payload),
@@ -42,6 +43,8 @@ export function ProfileSettingsPage() {
     }
   }, [profile.data]);
 
+  const displayedSubjectGroups = useMemo(() => matchingSubjectGroups(activeTeachingYear, subjectSearch), [activeTeachingYear, subjectSearch]);
+
   function submit(event: FormEvent) {
     event.preventDefault();
     if (form) save.mutate(form);
@@ -64,7 +67,6 @@ export function ProfileSettingsPage() {
 
   const imageUrl = assetUrl(form.profileImageUrl);
   const teachingOfferings = validTeachingOfferings(form);
-  const activeSubjectGroups = subjectGroupsForYear(activeTeachingYear);
   const selectedUniversity = universitySelectValue(form.university, universityOtherMode);
 
   function toggleSubject(year: string, subject: string, checked: boolean) {
@@ -144,13 +146,13 @@ export function ProfileSettingsPage() {
           </Stack>
         </SettingsPanel>
 
-        <SettingsPanel title="Years and subjects">
+        <SettingsPanel title="Year levels and subjects">
           <Stack sx={{ gap: 2 }}>
             <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
               {teachingOfferings.map((offering) => (
                 <Chip
                   key={teachingOfferingKey(offering.tutorYear, offering.subject)}
-                  label={`${offering.tutorYear} ${offering.subject}`}
+                  label={`${teachingYearLabel(offering.tutorYear)} - ${offering.subject}`}
                   onDelete={() => removeOffering(offering.tutorYear, offering.subject)}
                   sx={{ bgcolor: '#f5f5f5' }}
                 />
@@ -171,7 +173,7 @@ export function ProfileSettingsPage() {
               <Box>
                 <Typography id="teaching-subjects-title" variant="h5" sx={{ fontWeight: 700 }}>What subjects do you tutor?</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Select a year, then tick every subject you teach for that year.
+                  Select a student year level, then tick every subject you teach for that level.
                 </Typography>
               </Box>
               <Button type="button" variant="outlined" onClick={() => setSubjectModalOpen(false)}>Done</Button>
@@ -196,36 +198,75 @@ export function ProfileSettingsPage() {
                     textTransform: 'none',
                   }}
                 >
-                  {year}
+                  {teachingYearLabel(year)}
                 </Button>
               ))}
             </Box>
 
-            <Box sx={{ maxHeight: { xs: '62vh', sm: '66vh' }, overflowY: 'auto', pt: 3 }}>
-              <Box sx={{ display: 'grid', gap: { xs: 2, sm: 3 }, gridTemplateColumns: activeSubjectGroups.length === 1 ? '1fr' : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' } }}>
-                {activeSubjectGroups.map((group) => {
-                  const allSelected = group.subjects.every((subject) => hasTeachingOffering(teachingOfferings, activeTeachingYear, subject));
-                  return (
-                    <Box key={group.label}>
-                      <FormControlLabel
-                        control={<Checkbox checked={allSelected} onChange={(event) => toggleSubjectGroup(activeTeachingYear, group, event.target.checked)} />}
-                        label={<Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{group.label}</Typography>}
-                        sx={{ m: 0 }}
-                      />
-                      <Box sx={{ display: 'grid', gap: 0.5, gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fit, minmax(260px, 1fr))' }, mt: 0.5 }}>
-                        {group.subjects.map((subject) => (
-                          <FormControlLabel
-                            key={subject}
-                            control={<Checkbox checked={hasTeachingOffering(teachingOfferings, activeTeachingYear, subject)} onChange={(event) => toggleSubject(activeTeachingYear, subject, event.target.checked)} />}
-                            label={<Typography variant="body2">{subject}</Typography>}
-                            sx={{ m: 0, py: 0.25 }}
-                          />
-                        ))}
-                      </Box>
+            <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, gap: 1.5, pt: 2.5 }}>
+              <TextField
+                label="Search subjects or year levels"
+                value={subjectSearch}
+                onChange={(event) => setSubjectSearch(event.target.value)}
+                placeholder="e.g. Physics, Maths, Year 11"
+                size="small"
+                fullWidth
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Icon name="search" className="h-4 w-4" />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+              <Button type="button" variant="outlined" color="inherit" disabled={!subjectSearch} onClick={() => setSubjectSearch('')} sx={{ minHeight: 40, whiteSpace: 'nowrap' }}>
+                Clear search
+              </Button>
+            </Stack>
+
+            <Box sx={{ maxHeight: { xs: '58vh', sm: '62vh' }, overflowY: 'auto', pt: 3 }}>
+              <Stack sx={{ gap: 3 }}>
+                {displayedSubjectGroups.map(({ year, groups }) => (
+                  <Box key={year}>
+                    {subjectSearch.trim() && (
+                      <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 700 }}>
+                        {teachingYearLabel(year)}
+                      </Typography>
+                    )}
+                    <Box sx={{ display: 'grid', gap: { xs: 2, sm: 3 }, gridTemplateColumns: groups.length === 1 ? '1fr' : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' } }}>
+                      {groups.map((group) => {
+                        const allSelected = group.subjects.every((subject) => hasTeachingOffering(teachingOfferings, year, subject));
+                        return (
+                          <Box key={`${year}-${group.label}`}>
+                            <FormControlLabel
+                              control={<Checkbox checked={allSelected} onChange={(event) => toggleSubjectGroup(year, group, event.target.checked)} />}
+                              label={<Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{group.label}</Typography>}
+                              sx={{ m: 0 }}
+                            />
+                            <Box sx={{ display: 'grid', gap: 0.5, gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fit, minmax(260px, 1fr))' }, mt: 0.5 }}>
+                              {group.subjects.map((subject) => (
+                                <FormControlLabel
+                                  key={`${year}-${subject}`}
+                                  control={<Checkbox checked={hasTeachingOffering(teachingOfferings, year, subject)} onChange={(event) => toggleSubject(year, subject, event.target.checked)} />}
+                                  label={<Typography variant="body2">{subject}</Typography>}
+                                  sx={{ m: 0, py: 0.25 }}
+                                />
+                              ))}
+                            </Box>
+                          </Box>
+                        );
+                      })}
                     </Box>
-                  );
-                })}
-              </Box>
+                  </Box>
+                ))}
+                {displayedSubjectGroups.length === 0 && (
+                  <Paper variant="outlined" sx={{ borderStyle: 'dashed', p: 3, textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">No subjects match your search.</Typography>
+                  </Paper>
+                )}
+              </Stack>
             </Box>
           </DialogContent>
         </Dialog>
@@ -330,6 +371,27 @@ function sortTeachingOfferings(offerings: TeachingOfferingItem[]) {
     teachingYearSortIndex(a.tutorYear) - teachingYearSortIndex(b.tutorYear)
     || a.subject.localeCompare(b.subject)
   ));
+}
+
+function matchingSubjectGroups(activeTeachingYear: string, search: string) {
+  const term = search.trim().toLowerCase();
+  const years = term ? teachingYearOptions : [activeTeachingYear];
+
+  return years
+    .map((year) => {
+      const yearMatches = teachingYearLabel(year).toLowerCase().includes(term) || year.toLowerCase().includes(term);
+      const groups = subjectGroupsForYear(year)
+        .map((group) => {
+          const groupMatches = group.label.toLowerCase().includes(term);
+          const subjects = term && !yearMatches && !groupMatches
+            ? group.subjects.filter((subject) => subject.toLowerCase().includes(term))
+            : group.subjects;
+          return { ...group, subjects };
+        })
+        .filter((group) => group.subjects.length > 0);
+      return { year, groups };
+    })
+    .filter(({ groups }) => groups.length > 0);
 }
 
 function hasTeachingOffering(offerings: TeachingOfferingItem[], tutorYear: string, subject: string) {

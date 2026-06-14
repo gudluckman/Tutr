@@ -61,7 +61,7 @@ export function DashboardLayout() {
   return (
     <div className="min-h-screen bg-background md:flex">
       <aside className="fixed inset-x-0 bottom-0 z-40 border-t border-sidebar-border bg-sidebar md:static md:flex md:min-h-screen md:w-64 md:flex-col md:border-r md:border-t-0">
-        <Link to="/" className="hidden h-16 items-center gap-2 border-b border-sidebar-border px-6 md:flex">
+        <Link to="/dashboard" className="hidden h-16 items-center gap-2 border-b border-sidebar-border px-6 md:flex">
           <Icon name="graduation" className="h-8 w-8 text-sidebar-primary" />
           <span className="text-xl font-semibold text-sidebar-foreground">Tutr</span>
         </Link>
@@ -108,7 +108,7 @@ export function DashboardLayout() {
       </aside>
       <main className="min-w-0 flex-1 overflow-auto pb-16 md:pb-0">
         <div className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-4 md:hidden">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <Icon name="graduation" className="h-7 w-7 text-primary" />
             <span className="text-lg font-semibold">Tutr</span>
           </Link>

@@ -5,22 +5,39 @@ import { Icon } from '../../../components/ui/Icon';
 import type { LessonLink, LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../../types/lesson';
 import type { Student } from '../../../types/student';
 import { googleCalendarColors, googleReminderOptions } from './constants';
-import { lessonTitle, statusLabel } from './lessonUtils';
+import { lessonTitle, lessonTitleWithSubject, statusLabel, subjectOptionsForStudent } from './lessonUtils';
 
 export function SingleLessonFields({ form, setForm, students, googleConnected }: { form: LessonPayload; setForm: (form: LessonPayload) => void; students: Student[]; googleConnected: boolean }) {
   const setLessonLinks = (lessonLinks: LessonLink[]) => setForm({ ...form, lessonLinks, miroBoardUrl: boardUrlFromLinks(lessonLinks) });
+  const selectedStudent = students.find((student) => student.id === form.studentId);
+  const subjectOptions = subjectOptionsForStudent(selectedStudent);
   return (
     <>
       <FormRow columns={2}>
         <StudentSelect value={form.studentId} onChange={(student) => setForm({
           ...form,
           studentId: student?.id ?? '',
-          title: student ? lessonTitle(student) : '',
+          title: student ? defaultLessonTitle(student) : '',
           hourlyRate: student?.hourlyRate ?? 0,
           inviteEmail: student?.parentEmail ?? '',
         })} students={students} />
-        <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
+        {subjectOptions.length > 1 ? (
+          <SubjectSelect
+            value={subjectFromGeneratedTitle(selectedStudent, form.title)}
+            options={subjectOptions}
+            onChange={(subject) => setForm({ ...form, title: selectedStudent ? subject ? lessonTitleWithSubject(selectedStudent, subject) : lessonTitle(selectedStudent) : form.title })}
+          />
+        ) : (
+          <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
+        )}
       </FormRow>
+      {subjectOptions.length > 1 && (
+        <FormRow columns={2}>
+          <Box sx={{ gridColumn: { md: 'span 2' } }}>
+            <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
+          </Box>
+        </FormRow>
+      )}
       <FormRow columns={3}>
         <FormInput label="Date and time *" type="datetime-local" value={form.lessonDate} onChange={(value) => setForm({ ...form, lessonDate: value })} required />
         <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
@@ -54,18 +71,35 @@ export function SingleLessonFields({ form, setForm, students, googleConnected }:
 
 export function RecurringFields({ form, setForm, students, googleConnected }: { form: RecurringLessonPayload; setForm: (form: RecurringLessonPayload) => void; students: Student[]; googleConnected: boolean }) {
   const setLessonLinks = (lessonLinks: LessonLink[]) => setForm({ ...form, lessonLinks, miroBoardUrl: boardUrlFromLinks(lessonLinks) });
+  const selectedStudent = students.find((student) => student.id === form.studentId);
+  const subjectOptions = subjectOptionsForStudent(selectedStudent);
   return (
     <>
       <FormRow columns={2}>
         <StudentSelect value={form.studentId} onChange={(student) => setForm({
           ...form,
           studentId: student?.id ?? '',
-          title: student ? lessonTitle(student) : '',
+          title: student ? defaultLessonTitle(student) : '',
           hourlyRate: student?.hourlyRate ?? 0,
           inviteEmail: student?.parentEmail ?? '',
         })} students={students} />
-        <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
+        {subjectOptions.length > 1 ? (
+          <SubjectSelect
+            value={subjectFromGeneratedTitle(selectedStudent, form.title)}
+            options={subjectOptions}
+            onChange={(subject) => setForm({ ...form, title: selectedStudent ? subject ? lessonTitleWithSubject(selectedStudent, subject) : lessonTitle(selectedStudent) : form.title })}
+          />
+        ) : (
+          <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
+        )}
       </FormRow>
+      {subjectOptions.length > 1 && (
+        <FormRow columns={2}>
+          <Box sx={{ gridColumn: { md: 'span 2' } }}>
+            <FormInput label="Lesson title *" value={form.title ?? ''} onChange={(value) => setForm({ ...form, title: value })} required />
+          </Box>
+        </FormRow>
+      )}
       <FormRow columns={3}>
         <FormInput label="First lesson date and time *" type="datetime-local" value={form.firstLessonDate} onChange={(value) => setForm({ ...form, firstLessonDate: value })} required />
         <FormInput label="Duration (minutes) *" type="number" value={String(form.durationMinutes)} onChange={(value) => setForm({ ...form, durationMinutes: Number(value) })} required />
@@ -95,6 +129,28 @@ export function RecurringFields({ form, setForm, students, googleConnected }: { 
       <TextArea label="Homework" value={form.homework ?? ''} onChange={(value) => setForm({ ...form, homework: value })} />
     </>
   );
+}
+
+function SubjectSelect({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
+  return (
+    <FormControl size="small" fullWidth>
+      <InputLabel>Lesson subject</InputLabel>
+      <Select label="Lesson subject" value={value} onChange={(event) => onChange(event.target.value)}>
+        <MenuItem value="">General lesson</MenuItem>
+        {options.map((subject) => <MenuItem key={subject} value={subject}>{subject}</MenuItem>)}
+      </Select>
+    </FormControl>
+  );
+}
+
+function defaultLessonTitle(student: Student) {
+  const subjects = subjectOptionsForStudent(student);
+  return subjects.length === 1 ? lessonTitleWithSubject(student, subjects[0]) : lessonTitle(student);
+}
+
+function subjectFromGeneratedTitle(student: Student | undefined, title?: string) {
+  if (!student || !title) return '';
+  return subjectOptionsForStudent(student).find((subject) => title === lessonTitleWithSubject(student, subject)) ?? '';
 }
 
 function StudentSelect({ value, onChange, students }: { value: string; onChange: (student?: Student) => void; students: Student[] }) {

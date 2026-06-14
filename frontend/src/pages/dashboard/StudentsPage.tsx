@@ -1,11 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Autocomplete,
   Box,
   Button,
   Checkbox,
+  FormControl,
   FormControlLabel,
+  FormHelperText,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -22,14 +28,17 @@ import { createStudent, deleteStudent, listStudents, updateStudent } from '../..
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { Student, StudentPayload } from '../../types/student';
+import { subjectGroupsForYear } from './profileTeachingOptions';
 
 const emptyStudent: StudentPayload = { name: '', parentName: '', parentEmail: '', parentPhone: '', schoolYear: '', subject: '', hourlyRate: 0, notes: '', active: true };
+const schoolYearOptions = Array.from({ length: 12 }, (_, index) => `Year ${index + 1}`);
 
 export function StudentsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
   const [form, setForm] = useState<StudentPayload>(emptyStudent);
+  const [subjectError, setSubjectError] = useState(false);
   const students = useQuery({ queryKey: ['students'], queryFn: listStudents });
   const save = useMutation({
     mutationFn: () => editing ? updateStudent(editing.id, form) : createStudent(form),
@@ -42,6 +51,10 @@ export function StudentsPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    if (!form.subject?.trim()) {
+      setSubjectError(true);
+      return;
+    }
     save.mutate();
   }
 
@@ -54,6 +67,7 @@ export function StudentsPage() {
   function resetForm() {
     setEditing(null);
     setForm(emptyStudent);
+    setSubjectError(false);
     setShowForm(false);
   }
 
@@ -85,9 +99,8 @@ export function StudentsPage() {
             <StudentTextField label="Student name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
             <StudentTextField label="Parent name" value={form.parentName ?? ''} onChange={(value) => setForm({ ...form, parentName: value })} required />
             <StudentTextField label="Student/parent Gmail" type="email" value={form.parentEmail ?? ''} onChange={(value) => setForm({ ...form, parentEmail: value })} required />
-            <StudentTextField label="Subject" value={form.subject ?? ''} onChange={(value) => setForm({ ...form, subject: value })} required />
             <StudentTextField label="Parent phone" value={form.parentPhone ?? ''} onChange={(value) => setForm({ ...form, parentPhone: value })} required />
-            <StudentTextField label="School year" value={form.schoolYear ?? ''} onChange={(value) => setForm({ ...form, schoolYear: value })} required />
+            <StudentYearSelect value={form.schoolYear ?? ''} onChange={(schoolYear) => setForm({ ...form, schoolYear, subject: '' })} />
             <StudentTextField label="Hourly rate" type="number" value={String(form.hourlyRate ?? 0)} onChange={(value) => setForm({ ...form, hourlyRate: Number(value) })} required />
             <Stack sx={{ justifyContent: 'center' }}>
               <FormControlLabel
@@ -95,6 +108,15 @@ export function StudentsPage() {
                 label="Active student"
               />
             </Stack>
+            <StudentSubjectPicker
+              schoolYear={form.schoolYear ?? ''}
+              value={form.subject ?? ''}
+              error={subjectError}
+              onChange={(subject) => {
+                setSubjectError(false);
+                setForm({ ...form, subject });
+              }}
+            />
             <TextField
               label="Notes"
               multiline
@@ -119,7 +141,7 @@ export function StudentsPage() {
           <TableHead>
             <TableRow sx={{ bgcolor: 'grey.50' }}>
               <HeaderCell>Name</HeaderCell>
-              <HeaderCell>Subject</HeaderCell>
+              <HeaderCell>Subject(s)</HeaderCell>
               <HeaderCell>Parent</HeaderCell>
               <HeaderCell>Rate</HeaderCell>
               <HeaderCell align="right">Actions</HeaderCell>
@@ -173,6 +195,55 @@ function StudentTextField({ label, value, onChange, type = 'text', required = fa
       slotProps={type === 'number' ? { htmlInput: { min: 0, step: 1 } } : undefined}
     />
   );
+}
+
+function StudentYearSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <FormControl required>
+      <InputLabel>Year level</InputLabel>
+      <Select label="Year level" value={value} onChange={(event) => onChange(event.target.value)}>
+        {schoolYearOptions.map((year) => <MenuItem key={year} value={year}>{year}</MenuItem>)}
+      </Select>
+    </FormControl>
+  );
+}
+
+function StudentSubjectPicker({ schoolYear, value, error, onChange }: { schoolYear: string; value: string; error: boolean; onChange: (value: string) => void }) {
+  const selectedSubjects = studentSubjectList(value);
+  const subjectOptions = schoolYear
+    ? Array.from(new Set(subjectGroupsForYear(schoolYear).flatMap((group) => group.subjects))).sort((a, b) => a.localeCompare(b))
+    : [];
+
+  return (
+    <Box sx={{ gridColumn: { md: '1 / -1' } }}>
+      <Autocomplete
+        multiple
+        disableCloseOnSelect
+        disabled={!schoolYear}
+        options={subjectOptions}
+        value={selectedSubjects.filter((subject) => subjectOptions.includes(subject))}
+        onChange={(_, subjects) => onChange(subjects.join(', '))}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Subject(s) tutored"
+            placeholder={schoolYear ? 'Search and select subjects' : 'Select a year level first'}
+            error={error}
+          />
+        )}
+      />
+      <FormHelperText error={error}>
+        {error ? 'Select at least one subject.' : selectedSubjects.length ? `${selectedSubjects.length} selected` : 'Choose every subject this student is tutored in.'}
+      </FormHelperText>
+    </Box>
+  );
+}
+
+function studentSubjectList(value: string) {
+  return value
+    .split(/[,;\n]+/)
+    .map((subject) => subject.trim())
+    .filter(Boolean);
 }
 
 function HeaderCell({ children, align = 'left' }: { children: ReactNode; align?: 'left' | 'right' }) {

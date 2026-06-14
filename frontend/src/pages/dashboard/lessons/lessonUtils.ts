@@ -5,7 +5,25 @@ import type { CalendarView } from './types';
 const lessonAmountNumber = new Intl.NumberFormat('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function lessonTitle(student: Student) {
-  return [student.name, student.schoolYear, student.subject].filter(Boolean).join(' ');
+  return [student.name, student.schoolYear].filter(Boolean).join(' - ');
+}
+
+export function lessonTitleWithSubject(student: Student, subject: string) {
+  return [student.name, student.schoolYear, subject].filter(Boolean).join(' - ');
+}
+
+export function subjectOptionsForStudent(student?: Student) {
+  if (!student?.subject) return [];
+  return student.subject
+    .split(/[,;\n]+/)
+    .map((subject) => subject.trim())
+    .filter(Boolean);
+}
+
+export function isGeneratedLessonTitle(student: Student, title?: string) {
+  if (!title) return false;
+  if (title === lessonTitle(student)) return true;
+  return subjectOptionsForStudent(student).some((subject) => title === lessonTitleWithSubject(student, subject));
 }
 
 export function statusLabel(status: string) {
