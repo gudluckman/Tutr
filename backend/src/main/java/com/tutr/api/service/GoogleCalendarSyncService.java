@@ -654,6 +654,7 @@ public class GoogleCalendarSyncService {
                             } else if (googleOccurrenceDiffersFromSeries(series, event, originalStart.get())) {
                                 Lesson generatedLesson = lessonFromSeriesOccurrence(series, originalStart.get());
                                 if (syncLessonFromGoogleEvent(generatedLesson, event)) {
+                                    excludeSeriesOccurrence(series, originalStart.get());
                                     if (!isBlank(eventId)) {
                                         generatedLesson.setGoogleEventId(eventId);
                                         lessonsByGoogleEventId.put(eventId, generatedLesson);
@@ -680,6 +681,9 @@ public class GoogleCalendarSyncService {
                         } else {
                             Instant previousStart = lesson.getLessonDate();
                             if (!syncLessonFromGoogleEvent(lesson, event)) continue;
+                            if (!Objects.equals(lesson.getLessonDate(), originalStart.get())) {
+                                excludeSeriesOccurrence(series, originalStart.get());
+                            }
                             if (!isBlank(eventId)) {
                                 lesson.setGoogleEventId(eventId);
                                 lessonsByGoogleEventId.put(eventId, lesson);
