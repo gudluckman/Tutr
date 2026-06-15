@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface LessonSeriesRepository extends JpaRepository<LessonSeries, UUID> {
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "student")
     List<LessonSeries> findByTutorOrderByFirstLessonDateDesc(User tutor);
 
     List<LessonSeries> findByTutorAndGoogleEventIdIsNotNull(User tutor);

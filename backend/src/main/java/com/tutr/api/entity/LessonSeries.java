@@ -60,9 +60,14 @@ public class LessonSeries extends BaseEntity {
     private Integer occurrenceCount;
     private Instant recurrenceUntil;
     private String miroBoardUrl;
+    private String lessonNotes;
+    private String homework;
     @Convert(converter = LessonLinksConverter.class)
     @Column(columnDefinition = "TEXT")
     private List<LessonLink> lessonLinks = List.of();
+    @Convert(converter = InstantListConverter.class)
+    @Column(columnDefinition = "TEXT")
+    private List<Instant> excludedLessonDates = List.of();
     private String inviteEmail;
 
     @Column(nullable = false)

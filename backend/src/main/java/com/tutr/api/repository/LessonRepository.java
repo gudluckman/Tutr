@@ -24,6 +24,8 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
 
     List<Lesson> findByLessonSeriesOrderByLessonDateAsc(LessonSeries lessonSeries);
 
+    Optional<Lesson> findByLessonSeriesAndLessonDate(LessonSeries lessonSeries, java.time.Instant lessonDate);
+
     void deleteByLessonSeries(LessonSeries lessonSeries);
 
     @EntityGraph(attributePaths = "student")

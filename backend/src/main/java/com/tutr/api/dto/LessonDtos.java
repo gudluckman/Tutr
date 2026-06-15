@@ -116,6 +116,33 @@ public final class LessonDtos {
                     lesson.getCreatedAt()
             );
         }
+
+        public static LessonResponse fromSeriesOccurrence(LessonSeries series, Instant occurrenceDate, UUID occurrenceId) {
+            return new LessonResponse(
+                    occurrenceId,
+                    series.getId(),
+                    series.getStudent().getId(),
+                    series.getStudent().getName(),
+                    series.getTitle(),
+                    occurrenceDate,
+                    series.getDurationMinutes(),
+                    series.getHourlyRate(),
+                    LessonStatus.SCHEDULED,
+                    PaymentStatus.UNPAID,
+                    series.getLessonNotes(),
+                    series.getHomework(),
+                    series.getMiroBoardUrl(),
+                    series.getLessonLinks(),
+                    series.getInviteEmail(),
+                    series.getGoogleColorId(),
+                    series.getGoogleExtraReminderMinutes(),
+                    series.isGoogleSyncEnabled(),
+                    series.getGoogleMeetLink(),
+                    series.getGoogleSyncStatus(),
+                    series.getGoogleSyncError(),
+                    series.getCreatedAt()
+            );
+        }
     }
 
     public record RecurringLessonResponse(
@@ -132,6 +159,16 @@ public final class LessonDtos {
                     series.getGoogleSyncStatus(),
                     series.getGoogleSyncError(),
                     lessons.stream().map(LessonResponse::from).toList()
+            );
+        }
+
+        public static RecurringLessonResponse fromResponses(LessonSeries series, List<LessonResponse> lessons) {
+            return new RecurringLessonResponse(
+                    series.getId(),
+                    series.getRecurrenceRule(),
+                    series.getGoogleSyncStatus(),
+                    series.getGoogleSyncError(),
+                    lessons
             );
         }
     }

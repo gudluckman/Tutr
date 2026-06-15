@@ -15,10 +15,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.tutr.api.dto.LessonDtos.*;
@@ -29,18 +34,50 @@ public class LessonService {
     private static final List<String> GOOGLE_COLOR_IDS = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11");
     private static final int MAX_GOOGLE_EXTRA_REMINDER_MINUTES = 28 * 24 * 60;
     private static final int MAX_LESSON_LINKS = 10;
+    private static final int LAZY_RECURRING_LOOKBACK_DAYS = 180;
+    private static final int LAZY_RECURRING_LOOKAHEAD_DAYS = 365;
+    private static final int MAX_LAZY_OCCURRENCES_PER_SERIES = 104;
 
     private final LessonRepository lessons;
     private final LessonSeriesRepository lessonSeries;
     private final StudentService students;
     private final GoogleCalendarSyncService googleCalendar;
 
+    @Transactional(readOnly = true)
     public List<LessonResponse> list(User tutor) {
-        return lessons.findByTutorOrderByLessonDateDesc(tutor).stream().map(LessonResponse::from).toList();
+        List<Lesson> storedLessons = lessons.findByTutorOrderByLessonDateDesc(tutor);
+        List<LessonResponse> responses = new ArrayList<>(
+                storedLessons.stream().map(LessonResponse::from).toList());
+
+        Set<String> materializedOccurrences = new HashSet<>();
+        for (Lesson lesson : storedLessons) {
+            if (lesson.getLessonSeries() != null) {
+                materializedOccurrences.add(occurrenceKey(lesson.getLessonSeries(), lesson.getLessonDate()));
+            }
+        }
+
+        Instant now = Instant.now();
+        Instant windowStart = now.minus(LAZY_RECURRING_LOOKBACK_DAYS, ChronoUnit.DAYS);
+        Instant windowEnd = now.plus(LAZY_RECURRING_LOOKAHEAD_DAYS, ChronoUnit.DAYS);
+        for (LessonSeries series : lessonSeries.findByTutorOrderByFirstLessonDateDesc(tutor)) {
+            responses.addAll(seriesOccurrenceResponses(series, windowStart, windowEnd, materializedOccurrences));
+        }
+
+        return responses.stream()
+                .sorted(Comparator.comparing(LessonResponse::lessonDate).reversed())
+                .toList();
     }
 
+    @Transactional(readOnly = true)
     public LessonResponse get(User tutor, UUID id) {
-        return LessonResponse.from(lessonFor(tutor, id));
+        Optional<Lesson> stored = lessons.findByIdAndTutor(id, tutor);
+        if (stored.isPresent()) {
+            return LessonResponse.from(stored.get());
+        }
+        VirtualOccurrence occurrence = virtualOccurrenceFor(tutor, id)
+                .orElseThrow(() -> new EntityNotFoundException("Lesson not found"));
+        return LessonResponse.fromSeriesOccurrence(
+                occurrence.series(), occurrence.lessonDate(), occurrenceId(occurrence.series(), occurrence.lessonDate()));
     }
 
     @Transactional
@@ -54,7 +91,7 @@ public class LessonService {
 
     @Transactional
     public LessonResponse update(User tutor, UUID id, LessonRequest request) {
-        Lesson lesson = lessonFor(tutor, id);
+        Lesson lesson = materializedLessonFor(tutor, id);
         CalendarDetails previousCalendarDetails = CalendarDetails.from(lesson);
         apply(tutor, lesson, request);
         if (!previousCalendarDetails.equals(CalendarDetails.from(lesson))) {
@@ -68,7 +105,7 @@ public class LessonService {
         if (request.status() == null && request.paymentStatus() == null) {
             throw new IllegalArgumentException("Provide a lesson status or payment status");
         }
-        Lesson lesson = lessonFor(tutor, id);
+        Lesson lesson = materializedLessonFor(tutor, id);
         if (request.status() != null) {
             lesson.setStatus(request.status());
         }
@@ -91,6 +128,8 @@ public class LessonService {
         series.setIntervalCount(request.intervalCount() == null ? 1 : request.intervalCount());
         series.setOccurrenceCount(request.occurrenceCount());
         series.setRecurrenceUntil(request.recurrenceUntil());
+        series.setLessonNotes(request.lessonNotes());
+        series.setHomework(request.homework());
         List<LessonLink> links = lessonLinks(request.lessonLinks(), request.miroBoardUrl());
         series.setLessonLinks(links);
         series.setMiroBoardUrl(boardUrl(links, request.miroBoardUrl()));
@@ -101,56 +140,37 @@ public class LessonService {
         series.setRecurrenceRule(googleCalendar.rrule(series));
         lessonSeries.save(series);
 
-        List<Lesson> created = new ArrayList<>();
-        for (Instant occurrence : occurrences(series)) {
-            Lesson lesson = new Lesson();
-            lesson.setTutor(tutor);
-            lesson.setStudent(series.getStudent());
-            lesson.setLessonSeries(series);
-            lesson.setTitle(series.getTitle());
-            lesson.setLessonDate(occurrence);
-            lesson.setDurationMinutes(series.getDurationMinutes());
-            lesson.setHourlyRate(series.getHourlyRate());
-            lesson.setStatus(LessonStatus.SCHEDULED);
-            lesson.setPaymentStatus(PaymentStatus.UNPAID);
-            lesson.setLessonNotes(request.lessonNotes());
-            lesson.setHomework(request.homework());
-            lesson.setLessonLinks(links);
-            lesson.setMiroBoardUrl(boardUrl(links, request.miroBoardUrl()));
-            lesson.setInviteEmail(series.getInviteEmail());
-            lesson.setGoogleColorId(series.getGoogleColorId());
-            lesson.setGoogleExtraReminderMinutes(series.getGoogleExtraReminderMinutes());
-            lesson.setGoogleSyncEnabled(series.isGoogleSyncEnabled());
-            created.add(lesson);
-        }
-        lessons.saveAll(created);
         googleCalendar.syncSeries(series);
-        if (series.getGoogleSyncStatus() == GoogleSyncStatus.SYNCED) {
-            created.forEach(lesson -> {
-                lesson.setGoogleCalendarId(series.getGoogleCalendarId());
-                lesson.setGoogleMeetLink(series.getGoogleMeetLink());
-                lesson.setGoogleSyncStatus(GoogleSyncStatus.SYNCED);
-                lesson.setGoogleSyncError(null);
-            });
-        }
-        return RecurringLessonResponse.from(series, created);
+        Instant previewEnd = series.getFirstLessonDate().plus(11L * 7L * series.getIntervalCount(), ChronoUnit.DAYS);
+        return RecurringLessonResponse.fromResponses(
+                series,
+                seriesOccurrenceResponses(series, series.getFirstLessonDate(), previewEnd, Set.of()));
     }
 
     @Transactional
     public void delete(User tutor, UUID id) {
-        Lesson lesson = lessonFor(tutor, id);
+        Lesson lesson = lessons.findByIdAndTutor(id, tutor)
+                .orElseGet(() -> virtualOccurrenceFor(tutor, id)
+                        .map(this::transientLesson)
+                        .orElseThrow(() -> new EntityNotFoundException("Lesson not found")));
         if (lesson.getLessonSeries() == null) {
             googleCalendar.deleteLessonEvent(lesson);
         } else {
             googleCalendar.excludeSeriesOccurrence(lesson);
+            excludeOccurrence(lesson.getLessonSeries(), lesson.getLessonDate());
         }
-        lessons.delete(lesson);
+        if (lesson.getId() != null && lessons.existsById(lesson.getId())) {
+            lessons.delete(lesson);
+        }
     }
 
     @Transactional
     public void deleteSeries(User tutor, UUID lessonId) {
-        Lesson lesson = lessonFor(tutor, lessonId);
-        LessonSeries series = lesson.getLessonSeries();
+        LessonSeries series = lessons.findByIdAndTutor(lessonId, tutor)
+                .map(Lesson::getLessonSeries)
+                .orElseGet(() -> virtualOccurrenceFor(tutor, lessonId)
+                        .map(VirtualOccurrence::series)
+                        .orElse(null));
         if (series == null) {
             delete(tutor, lessonId);
             return;
@@ -164,7 +184,10 @@ public class LessonService {
 
     @Transactional
     public void deleteFollowing(User tutor, UUID lessonId) {
-        Lesson lesson = lessonFor(tutor, lessonId);
+        Lesson lesson = lessons.findByIdAndTutor(lessonId, tutor)
+                .orElseGet(() -> virtualOccurrenceFor(tutor, lessonId)
+                        .map(this::transientLesson)
+                        .orElseThrow(() -> new EntityNotFoundException("Lesson not found")));
         LessonSeries series = lesson.getLessonSeries();
         if (series == null) {
             delete(tutor, lessonId);
@@ -177,7 +200,7 @@ public class LessonService {
         List<Lesson> followingLessons = seriesLessons.stream()
                 .filter(seriesLesson -> !seriesLesson.getLessonDate().isBefore(lesson.getLessonDate()))
                 .toList();
-        if (followingLessons.size() == seriesLessons.size()) {
+        if (!lesson.getLessonDate().isAfter(tutorSeries.getFirstLessonDate())) {
             googleCalendar.deleteSeriesEvent(tutorSeries);
             lessons.deleteByLessonSeries(tutorSeries);
             lessonSeries.delete(tutorSeries);
@@ -190,6 +213,129 @@ public class LessonService {
 
     public Lesson lessonFor(User tutor, UUID id) {
         return lessons.findByIdAndTutor(id, tutor).orElseThrow(() -> new EntityNotFoundException("Lesson not found"));
+    }
+
+    private Lesson materializedLessonFor(User tutor, UUID id) {
+        Optional<Lesson> stored = lessons.findByIdAndTutor(id, tutor);
+        if (stored.isPresent()) {
+            return stored.get();
+        }
+        VirtualOccurrence occurrence = virtualOccurrenceFor(tutor, id)
+                .orElseThrow(() -> new EntityNotFoundException("Lesson not found"));
+        Lesson existing = lessons.findByLessonSeriesAndLessonDate(occurrence.series(), occurrence.lessonDate())
+                .orElse(null);
+        if (existing != null) {
+            return existing;
+        }
+        return lessons.save(transientLesson(occurrence));
+    }
+
+    private Optional<VirtualOccurrence> virtualOccurrenceFor(User tutor, UUID id) {
+        Instant now = Instant.now();
+        Instant windowStart = now.minus(LAZY_RECURRING_LOOKBACK_DAYS, ChronoUnit.DAYS);
+        Instant windowEnd = now.plus(LAZY_RECURRING_LOOKAHEAD_DAYS, ChronoUnit.DAYS);
+        for (LessonSeries series : lessonSeries.findByTutorOrderByFirstLessonDateDesc(tutor)) {
+            for (Instant occurrence : occurrencesBetween(series, windowStart, windowEnd, MAX_LAZY_OCCURRENCES_PER_SERIES)) {
+                if (occurrenceId(series, occurrence).equals(id)) {
+                    return Optional.of(new VirtualOccurrence(series, occurrence));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Lesson transientLesson(VirtualOccurrence occurrence) {
+        LessonSeries series = occurrence.series();
+        Lesson lesson = new Lesson();
+        lesson.setId(occurrenceId(series, occurrence.lessonDate()));
+        lesson.setTutor(series.getTutor());
+        lesson.setStudent(series.getStudent());
+        lesson.setLessonSeries(series);
+        lesson.setTitle(series.getTitle());
+        lesson.setLessonDate(occurrence.lessonDate());
+        lesson.setDurationMinutes(series.getDurationMinutes());
+        lesson.setHourlyRate(series.getHourlyRate());
+        lesson.setStatus(LessonStatus.SCHEDULED);
+        lesson.setPaymentStatus(PaymentStatus.UNPAID);
+        lesson.setLessonNotes(series.getLessonNotes());
+        lesson.setHomework(series.getHomework());
+        lesson.setLessonLinks(series.getLessonLinks());
+        lesson.setMiroBoardUrl(series.getMiroBoardUrl());
+        lesson.setInviteEmail(series.getInviteEmail());
+        lesson.setGoogleColorId(series.getGoogleColorId());
+        lesson.setGoogleExtraReminderMinutes(series.getGoogleExtraReminderMinutes());
+        lesson.setGoogleSyncEnabled(series.isGoogleSyncEnabled());
+        lesson.setGoogleCalendarId(series.getGoogleCalendarId());
+        lesson.setGoogleMeetLink(series.getGoogleMeetLink());
+        lesson.setGoogleSyncStatus(series.getGoogleSyncStatus());
+        lesson.setGoogleSyncError(series.getGoogleSyncError());
+        lesson.setCreatedAt(series.getCreatedAt());
+        lesson.setUpdatedAt(series.getUpdatedAt());
+        return lesson;
+    }
+
+    private List<LessonResponse> seriesOccurrenceResponses(
+            LessonSeries series,
+            Instant windowStart,
+            Instant windowEnd,
+            Set<String> materializedOccurrences
+    ) {
+        return occurrencesBetween(series, windowStart, windowEnd, MAX_LAZY_OCCURRENCES_PER_SERIES).stream()
+                .filter(occurrence -> !materializedOccurrences.contains(occurrenceKey(series, occurrence)))
+                .map(occurrence -> LessonResponse.fromSeriesOccurrence(series, occurrence, occurrenceId(series, occurrence)))
+                .toList();
+    }
+
+    private List<Instant> occurrencesBetween(
+            LessonSeries series,
+            Instant windowStart,
+            Instant windowEnd,
+            int maxOccurrences
+    ) {
+        List<Instant> dates = new ArrayList<>();
+        Set<Instant> excluded = new HashSet<>(series.getExcludedLessonDates() == null
+                ? List.of()
+                : series.getExcludedLessonDates());
+        Instant current = series.getFirstLessonDate();
+        int intervalWeeks = series.getIntervalCount() == null ? 1 : series.getIntervalCount();
+        int index = 0;
+        while (dates.size() < maxOccurrences) {
+            if (series.getOccurrenceCount() != null && index >= series.getOccurrenceCount()) {
+                break;
+            }
+            if (series.getRecurrenceUntil() != null && current.isAfter(series.getRecurrenceUntil())) {
+                break;
+            }
+            if (current.isAfter(windowEnd)) {
+                break;
+            }
+            if (!current.isBefore(windowStart) && !excluded.contains(current)) {
+                dates.add(current);
+            }
+            current = current.plus(7L * intervalWeeks, ChronoUnit.DAYS);
+            index++;
+        }
+        return dates;
+    }
+
+    private void excludeOccurrence(LessonSeries series, Instant lessonDate) {
+        List<Instant> excluded = new ArrayList<>(series.getExcludedLessonDates() == null
+                ? List.of()
+                : series.getExcludedLessonDates());
+        if (!excluded.contains(lessonDate)) {
+            excluded.add(lessonDate);
+            excluded.sort(Instant::compareTo);
+            series.setExcludedLessonDates(excluded);
+        }
+    }
+
+    private UUID occurrenceId(LessonSeries series, Instant lessonDate) {
+        return UUID.nameUUIDFromBytes(
+                ("lesson-series:" + series.getId() + ":" + lessonDate).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String occurrenceKey(LessonSeries series, Instant lessonDate) {
+        return series.getId() + ":" + lessonDate;
     }
 
     private void apply(User tutor, Lesson lesson, LessonRequest request) {
@@ -268,20 +414,6 @@ public class LessonService {
                 .orElse(legacyBoardUrl == null || legacyBoardUrl.isBlank() ? null : legacyBoardUrl.trim());
     }
 
-    private List<Instant> occurrences(LessonSeries series) {
-        int count = series.getOccurrenceCount() == null ? 12 : Math.min(series.getOccurrenceCount(), 52);
-        List<Instant> dates = new ArrayList<>();
-        Instant current = series.getFirstLessonDate();
-        for (int i = 0; i < count; i++) {
-            if (series.getRecurrenceUntil() != null && current.isAfter(series.getRecurrenceUntil())) {
-                break;
-            }
-            dates.add(current);
-            current = current.plus(7L * series.getIntervalCount(), ChronoUnit.DAYS);
-        }
-        return dates;
-    }
-
     private record CalendarDetails(
             UUID studentId,
             String title,
@@ -312,5 +444,8 @@ public class LessonService {
                     lesson.isGoogleSyncEnabled()
             );
         }
+    }
+
+    private record VirtualOccurrence(LessonSeries series, Instant lessonDate) {
     }
 }
