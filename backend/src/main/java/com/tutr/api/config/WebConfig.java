@@ -1,5 +1,12 @@
 package com.tutr.api.config;
 
+import com.tutr.api.converter.*;
+import com.tutr.api.dto.*;
+import com.tutr.api.entity.*;
+import com.tutr.api.enums.*;
+import com.tutr.api.repository.*;
+import com.tutr.api.service.*;
+
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;

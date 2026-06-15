@@ -1,5 +1,12 @@
 package com.tutr.api.common;
 
+import com.tutr.api.converter.*;
+import com.tutr.api.dto.*;
+import com.tutr.api.entity.*;
+import com.tutr.api.enums.*;
+import com.tutr.api.repository.*;
+import com.tutr.api.service.*;
+
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;

@@ -194,13 +194,13 @@ Dates must use `dd/MM/yyyy`. Imported weeks are merged into earnings totals and 
 tutr/
   backend/
     src/main/java/com/tutr/api/
-      auth/
-      users/
-      tutors/
-      students/
-      lessons/
-      enquiries/
-      analytics/
+      controller/
+      service/
+      dto/
+      entity/
+      repository/
+      enums/
+      converter/
       common/
       config/
     src/main/resources/db/migration/

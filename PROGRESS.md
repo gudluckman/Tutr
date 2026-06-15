@@ -339,6 +339,35 @@ directly from the calendar.
   lesson link display on desktop and mobile.
 - Consider whether the lesson filters should persist between dashboard visits.
 
+## 2026-06-15 - Codebase Onboarding And Backend Package Refactor
+
+### Completed
+
+- Added a standalone `codebase-map.html` onboarding guide with architecture,
+  system design, data-flow diagrams, route/API summaries, data model notes, and
+  change-location guidance for new developers.
+- Refactored backend Java packages from feature-first folders into clearer
+  role-based layers: `controller`, `service`, `dto`, `entity`, `repository`,
+  `enums`, and `converter`.
+- Updated backend package declarations and imports to match the new folder
+  structure while keeping `config` and `common` for cross-cutting code.
+- Updated README project structure and the codebase map so documentation
+  reflects the new backend organization.
+- Verified the backend still compiles with `./mvnw -DskipTests package`.
+
+### Outcome
+
+New developers now have a visual map of how Tutr works, and the backend is
+organized around the types of code they will usually look for first: APIs,
+services, DTOs, entities, repositories, and enums.
+
+### Next
+
+- Start local Postgres before running the full backend test suite, because the
+  current Spring context test still expects a database on `localhost:5432`.
+- Update any IDE bookmarks or open-file references that still point to the old
+  backend feature package paths.
+
 ## Current Focus
 
 - Stabilize the beta deployment and verify the full hosted workflow after each
