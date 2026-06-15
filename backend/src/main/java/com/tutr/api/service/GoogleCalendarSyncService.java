@@ -338,7 +338,7 @@ public class GoogleCalendarSyncService {
         expectedFutureIds.addAll(futureInstanceIds);
         expectedFutureIds.remove(series.getGoogleEventId());
         for (String eventId : expectedFutureIds) {
-            deleteEvent(connection, eventId, "future recurring lesson occurrence");
+            deleteEventIfPresent(connection, eventId, "future recurring lesson occurrence");
         }
     }
 
@@ -448,10 +448,18 @@ public class GoogleCalendarSyncService {
                         : String.valueOf(response.get("nextPageToken"));
             } catch (RuntimeException ex) {
                 log.warn("Could not list future Google Calendar occurrences for series {}", series.getId(), ex);
-                throw new IllegalStateException("Could not inspect Google Calendar recurring lessons. Try again before deleting local lessons.", ex);
+                return List.of();
             }
         } while (pageToken != null);
         return eventIds;
+    }
+
+    private void deleteEventIfPresent(GoogleCalendarConnection connection, String eventId, String label) {
+        try {
+            deleteEvent(connection, eventId, label);
+        } catch (IllegalStateException ex) {
+            log.warn("Could not delete optional Google Calendar event {} for {}", eventId, label, ex);
+        }
     }
 
     @Transactional
