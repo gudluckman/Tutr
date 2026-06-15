@@ -562,16 +562,32 @@ public class GoogleCalendarSyncService {
                                                   LessonSeries series) {
         List<Lesson> seriesLessons =
                 lessons.findByLessonSeriesOrderByLessonDateAsc(series);
-        if (seriesLessons.isEmpty()) {
-            return new SeriesSyncResult(0, 0);
-        }
 
-        Instant localWindowStart =
-                seriesLessons.getFirst().getLessonDate().minus(1, ChronoUnit.DAYS);
-        Lesson lastLocalLesson = seriesLessons.getLast();
-        Instant localWindowEnd = lastLocalLesson.getLessonDate()
-                .plusSeconds(lastLocalLesson.getDurationMinutes() * 60L)
-                .plus(1, ChronoUnit.DAYS);
+        Instant now = Instant.now();
+        Instant lazyWindowStart = now.minus(180, ChronoUnit.DAYS);
+        Instant lazyWindowEnd = now.plus(365, ChronoUnit.DAYS);
+        Instant localWindowStart = seriesLessons.isEmpty()
+                ? (series.getFirstLessonDate().isAfter(lazyWindowStart)
+                        ? series.getFirstLessonDate().minus(1, ChronoUnit.DAYS)
+                        : lazyWindowStart)
+                : seriesLessons.getFirst().getLessonDate().minus(1, ChronoUnit.DAYS);
+        Instant localWindowEnd;
+        if (seriesLessons.isEmpty()) {
+            localWindowEnd = lazyWindowEnd;
+        } else {
+            Lesson lastLocalLesson = seriesLessons.getLast();
+            localWindowEnd = lastLocalLesson.getLessonDate()
+                    .plusSeconds(lastLocalLesson.getDurationMinutes() * 60L)
+                    .plus(1, ChronoUnit.DAYS);
+            if (localWindowEnd.isBefore(lazyWindowEnd)) {
+                localWindowEnd = lazyWindowEnd;
+            }
+        }
+        if (series.getRecurrenceUntil() != null && series.getRecurrenceUntil().isBefore(localWindowEnd)) {
+            localWindowEnd = series.getRecurrenceUntil()
+                    .plusSeconds(series.getDurationMinutes() * 60L)
+                    .plus(1, ChronoUnit.DAYS);
+        }
 
         Map<Instant, Lesson> lessonsByStart = new HashMap<>();
         Map<String, Lesson> lessonsByGoogleEventId = new HashMap<>();
@@ -631,7 +647,25 @@ public class GoogleCalendarSyncService {
                                     .orElse(null);
                         }
                         if (lesson == null) {
-                            if (!"cancelled".equals(event.get("status"))) {
+                            if ("cancelled".equals(event.get("status"))) {
+                                if (excludeSeriesOccurrence(series, originalStart.get())) {
+                                    deleted++;
+                                }
+                            } else if (googleOccurrenceDiffersFromSeries(series, event, originalStart.get())) {
+                                Lesson generatedLesson = lessonFromSeriesOccurrence(series, originalStart.get());
+                                if (syncLessonFromGoogleEvent(generatedLesson, event)) {
+                                    if (!isBlank(eventId)) {
+                                        generatedLesson.setGoogleEventId(eventId);
+                                        lessonsByGoogleEventId.put(eventId, generatedLesson);
+                                    }
+                                    generatedLesson.setGoogleCalendarId(connection.getCalendarId());
+                                    generatedLesson.setGoogleSyncEnabled(true);
+                                    lessons.save(generatedLesson);
+                                    lessonsByStart.put(generatedLesson.getLessonDate(), generatedLesson);
+                                    matchedLessons.add(generatedLesson);
+                                    updated++;
+                                }
+                            } else {
                                 unmatchedActiveEvents.add(event);
                             }
                             continue;
@@ -639,6 +673,7 @@ public class GoogleCalendarSyncService {
 
                         matchedLessons.add(lesson);
                         if ("cancelled".equals(event.get("status"))) {
+                            excludeSeriesOccurrence(series, originalStart.get());
                             lessons.delete(lesson);
                             lessonsByStart.remove(lesson.getLessonDate());
                             deleted++;
@@ -694,6 +729,7 @@ public class GoogleCalendarSyncService {
                 .filter(l -> lessonsByStart.containsKey(l.getLessonDate()))
                 .toList();
         for (Lesson removed : removedFromGoogle) {
+            excludeSeriesOccurrence(series, removed.getLessonDate());
             lessons.delete(removed);
             deleted++;
         }
@@ -705,6 +741,70 @@ public class GoogleCalendarSyncService {
         return googleStartTime(event.get("originalStartTime"))
                 .or(() -> googleStartTime(event.get("start")))
                 .orElse(Instant.MAX);
+    }
+
+    private boolean googleOccurrenceDiffersFromSeries(
+            LessonSeries series,
+            Map<String, Object> event,
+            Instant originalStart
+    ) {
+        Optional<Instant> start = googleStartTime(event.get("start"));
+        Optional<Instant> end = googleStartTime(event.get("end"));
+        if (start.isPresent() && !Objects.equals(start.get(), originalStart)) {
+            return true;
+        }
+        if (start.isPresent() && end.isPresent() && end.get().isAfter(start.get())) {
+            int durationMinutes = Math.toIntExact(ChronoUnit.MINUTES.between(start.get(), end.get()));
+            if (!Objects.equals(series.getDurationMinutes(), durationMinutes)) {
+                return true;
+            }
+        }
+        Object summary = event.get("summary");
+        if (summary != null && !String.valueOf(summary).isBlank()
+                && !Objects.equals(series.getTitle(), String.valueOf(summary))) {
+            return true;
+        }
+        Optional<String> meetLink = googleMeetLink(event);
+        return meetLink.isPresent() && !Objects.equals(series.getGoogleMeetLink(), meetLink.get());
+    }
+
+    private Lesson lessonFromSeriesOccurrence(LessonSeries series, Instant occurrenceDate) {
+        Lesson lesson = new Lesson();
+        lesson.setTutor(series.getTutor());
+        lesson.setStudent(series.getStudent());
+        lesson.setLessonSeries(series);
+        lesson.setTitle(series.getTitle());
+        lesson.setLessonDate(occurrenceDate);
+        lesson.setDurationMinutes(series.getDurationMinutes());
+        lesson.setHourlyRate(series.getHourlyRate());
+        lesson.setStatus(LessonStatus.SCHEDULED);
+        lesson.setPaymentStatus(PaymentStatus.UNPAID);
+        lesson.setLessonNotes(series.getLessonNotes());
+        lesson.setHomework(series.getHomework());
+        lesson.setLessonLinks(series.getLessonLinks());
+        lesson.setMiroBoardUrl(series.getMiroBoardUrl());
+        lesson.setInviteEmail(series.getInviteEmail());
+        lesson.setGoogleColorId(series.getGoogleColorId());
+        lesson.setGoogleExtraReminderMinutes(series.getGoogleExtraReminderMinutes());
+        lesson.setGoogleSyncEnabled(series.isGoogleSyncEnabled());
+        lesson.setGoogleCalendarId(series.getGoogleCalendarId());
+        lesson.setGoogleMeetLink(series.getGoogleMeetLink());
+        lesson.setGoogleSyncStatus(series.getGoogleSyncStatus());
+        lesson.setGoogleSyncError(series.getGoogleSyncError());
+        return lesson;
+    }
+
+    private boolean excludeSeriesOccurrence(LessonSeries series, Instant occurrenceDate) {
+        List<Instant> excluded = new ArrayList<>(series.getExcludedLessonDates() == null
+                ? List.of()
+                : series.getExcludedLessonDates());
+        if (excluded.contains(occurrenceDate)) {
+            return false;
+        }
+        excluded.add(occurrenceDate);
+        excluded.sort(Instant::compareTo);
+        series.setExcludedLessonDates(excluded);
+        return true;
     }
 
     // -------------------------------------------------------------------------
@@ -838,6 +938,20 @@ public class GoogleCalendarSyncService {
                 && !Objects.equals(series.getTitle(), String.valueOf(summary))) {
             series.setTitle(String.valueOf(summary));
             changed = true;
+        }
+
+        Optional<Instant> start = googleStartTime(event.get("start"));
+        Optional<Instant> end = googleStartTime(event.get("end"));
+        if (start.isPresent() && !Objects.equals(series.getFirstLessonDate(), start.get())) {
+            series.setFirstLessonDate(start.get());
+            changed = true;
+        }
+        if (start.isPresent() && end.isPresent() && end.get().isAfter(start.get())) {
+            int durationMinutes = Math.toIntExact(ChronoUnit.MINUTES.between(start.get(), end.get()));
+            if (!Objects.equals(series.getDurationMinutes(), durationMinutes)) {
+                series.setDurationMinutes(durationMinutes);
+                changed = true;
+            }
         }
 
         // FIX: only overwrite our RRULE when Google returns a genuinely different one,
