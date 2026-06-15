@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -32,10 +33,12 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -51,12 +54,17 @@ public class AnalyticsService {
     private static final int MIN_IMPORT_YEAR = 2000;
     private static final BigDecimal MAX_WEEKLY_HOURS = BigDecimal.valueOf(168);
     private static final BigDecimal MAX_WEEKLY_INCOME = BigDecimal.valueOf(100_000);
+    private static final int LAZY_RECURRING_LOOKBACK_DAYS = 180;
+    private static final int LAZY_RECURRING_LOOKAHEAD_DAYS = 365;
+    private static final int MAX_LAZY_OCCURRENCES_PER_SERIES = 104;
 
     private final LessonRepository lessons;
+    private final LessonSeriesRepository lessonSeries;
     private final ImportedEarningRepository importedEarnings;
 
+    @Transactional(readOnly = true)
     public AnalyticsSummary summary(User tutor, RevenuePeriod period) {
-        List<Lesson> all = lessons.findByTutorOrderByLessonDateDesc(tutor);
+        List<AnalyticsLesson> all = analyticsLessons(tutor);
         LocalDate today = LocalDate.now(ANALYTICS_TIME_ZONE);
 
         Map<String, RevenueTotals> revenue = all.stream()
@@ -77,9 +85,9 @@ public class AnalyticsService {
                 currentPeriod.expectedRevenue(),
                 currentPeriod.paidRevenue(),
                 currentPeriod.outstandingRevenue(),
-                all.stream().filter(lesson -> lesson.getStatus() == LessonStatus.COMPLETED).count(),
-                all.stream().filter(lesson -> lesson.getStatus() == LessonStatus.SCHEDULED).count(),
-                all.stream().filter(lesson -> lesson.getStatus() == LessonStatus.CANCELLED).count(),
+                all.stream().filter(lesson -> lesson.status() == LessonStatus.COMPLETED).count(),
+                all.stream().filter(lesson -> lesson.status() == LessonStatus.SCHEDULED).count(),
+                all.stream().filter(lesson -> lesson.status() == LessonStatus.CANCELLED).count(),
                 revenue.entrySet().stream()
                         .sorted(Map.Entry.comparingByKey(Comparator.naturalOrder()))
                         .skip(Math.max(0, revenue.size() - 12L))
@@ -91,6 +99,31 @@ public class AnalyticsService {
                         ))
                         .toList()
         );
+    }
+
+    private List<AnalyticsLesson> analyticsLessons(User tutor) {
+        List<Lesson> storedLessons = lessons.findByTutorOrderByLessonDateDesc(tutor);
+        List<AnalyticsLesson> analyticsLessons = new ArrayList<>(
+                storedLessons.stream().map(AnalyticsLesson::from).toList());
+
+        Set<String> materializedOccurrences = new HashSet<>();
+        for (Lesson lesson : storedLessons) {
+            if (lesson.getLessonSeries() != null) {
+                materializedOccurrences.add(occurrenceKey(lesson.getLessonSeries(), lesson.getLessonDate()));
+            }
+        }
+
+        Instant now = Instant.now();
+        Instant windowStart = now.minus(LAZY_RECURRING_LOOKBACK_DAYS, java.time.temporal.ChronoUnit.DAYS);
+        Instant windowEnd = now.plus(LAZY_RECURRING_LOOKAHEAD_DAYS, java.time.temporal.ChronoUnit.DAYS);
+        for (LessonSeries series : lessonSeries.findByTutorOrderByFirstLessonDateDesc(tutor)) {
+            for (Instant occurrence : occurrencesBetween(series, windowStart, windowEnd)) {
+                if (!materializedOccurrences.contains(occurrenceKey(series, occurrence))) {
+                    analyticsLessons.add(AnalyticsLesson.from(series, occurrence));
+                }
+            }
+        }
+        return analyticsLessons;
     }
 
     public EarningsResponse earnings(User tutor, int requestedPage, int requestedPageSize, Integer requestedYear, Integer requestedMonth) {
@@ -406,19 +439,19 @@ public class AnalyticsService {
         return lesson.getPaymentStatus() == PaymentStatus.PAID;
     }
 
-    private boolean isExpectedLesson(Lesson lesson) {
-        return lesson.getStatus() != LessonStatus.CANCELLED || isPaidLesson(lesson);
+    private boolean isExpectedLesson(AnalyticsLesson lesson) {
+        return lesson.status() != LessonStatus.CANCELLED || lesson.paymentStatus() == PaymentStatus.PAID;
     }
 
-    private RevenueTotals revenueTotals(Lesson lesson) {
+    private RevenueTotals revenueTotals(AnalyticsLesson lesson) {
         BigDecimal amount = lessonAmount(lesson);
-        return isPaidLesson(lesson)
+        return lesson.paymentStatus() == PaymentStatus.PAID
                 ? new RevenueTotals(amount, amount, BigDecimal.ZERO)
                 : new RevenueTotals(amount, BigDecimal.ZERO, amount);
     }
 
-    private String revenueKey(Lesson lesson, RevenuePeriod period) {
-        return revenueKey(lesson.getLessonDate().atZone(ANALYTICS_TIME_ZONE).toLocalDate(), period);
+    private String revenueKey(AnalyticsLesson lesson, RevenuePeriod period) {
+        return revenueKey(lesson.lessonDate().atZone(ANALYTICS_TIME_ZONE).toLocalDate(), period);
     }
 
     private String revenueKey(LocalDate date, RevenuePeriod period) {
@@ -441,6 +474,43 @@ public class AnalyticsService {
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal lessonAmount(AnalyticsLesson lesson) {
+        return lesson.hourlyRate()
+                .multiply(BigDecimal.valueOf(lesson.durationMinutes()))
+                .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+    }
+
+    private List<Instant> occurrencesBetween(LessonSeries series, Instant windowStart, Instant windowEnd) {
+        List<Instant> dates = new ArrayList<>();
+        Set<Instant> excluded = new HashSet<>(series.getExcludedLessonDates() == null
+                ? List.of()
+                : series.getExcludedLessonDates());
+        Instant current = series.getFirstLessonDate();
+        int intervalWeeks = series.getIntervalCount() == null ? 1 : series.getIntervalCount();
+        int index = 0;
+        while (dates.size() < MAX_LAZY_OCCURRENCES_PER_SERIES) {
+            if (series.getOccurrenceCount() != null && index >= series.getOccurrenceCount()) {
+                break;
+            }
+            if (series.getRecurrenceUntil() != null && current.isAfter(series.getRecurrenceUntil())) {
+                break;
+            }
+            if (current.isAfter(windowEnd)) {
+                break;
+            }
+            if (!current.isBefore(windowStart) && !excluded.contains(current)) {
+                dates.add(current);
+            }
+            current = current.plus(7L * intervalWeeks, java.time.temporal.ChronoUnit.DAYS);
+            index++;
+        }
+        return dates;
+    }
+
+    private String occurrenceKey(LessonSeries series, Instant lessonDate) {
+        return series.getId() + ":" + lessonDate;
+    }
+
     private record RevenueTotals(BigDecimal expectedRevenue, BigDecimal paidRevenue, BigDecimal outstandingRevenue) {
         private static final RevenueTotals ZERO = new RevenueTotals(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
@@ -457,6 +527,34 @@ public class AnalyticsService {
     }
 
     private record ParsedEarning(LocalDate startDate, LocalDate endDate, BigDecimal weeklyHours, BigDecimal weeklyIncome) {
+    }
+
+    private record AnalyticsLesson(
+            Instant lessonDate,
+            Integer durationMinutes,
+            BigDecimal hourlyRate,
+            LessonStatus status,
+            PaymentStatus paymentStatus
+    ) {
+        private static AnalyticsLesson from(Lesson lesson) {
+            return new AnalyticsLesson(
+                    lesson.getLessonDate(),
+                    lesson.getDurationMinutes(),
+                    lesson.getHourlyRate(),
+                    lesson.getStatus(),
+                    lesson.getPaymentStatus()
+            );
+        }
+
+        private static AnalyticsLesson from(LessonSeries series, Instant occurrenceDate) {
+            return new AnalyticsLesson(
+                    occurrenceDate,
+                    series.getDurationMinutes(),
+                    series.getHourlyRate(),
+                    LessonStatus.SCHEDULED,
+                    PaymentStatus.UNPAID
+            );
+        }
     }
 
     private static final class WeeklyEarningTotals {
