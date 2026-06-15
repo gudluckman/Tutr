@@ -184,7 +184,7 @@ public class LessonService {
             return;
         }
 
-        googleCalendar.endSeriesBefore(lesson);
+        googleCalendar.endSeriesBefore(lesson, followingLessons);
         lessons.deleteAll(followingLessons);
     }
 

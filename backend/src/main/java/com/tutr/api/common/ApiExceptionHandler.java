@@ -46,6 +46,13 @@ public class ApiExceptionHandler {
         return detail;
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    ProblemDetail conflict(IllegalStateException ex) {
+        ProblemDetail detail = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        detail.setTitle(ex.getMessage());
+        return detail;
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     ProblemDetail forbidden(AccessDeniedException ex) {
         ProblemDetail detail = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
@@ -53,4 +60,3 @@ public class ApiExceptionHandler {
         return detail;
     }
 }
-
