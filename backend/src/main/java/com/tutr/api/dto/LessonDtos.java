@@ -90,7 +90,7 @@ public final class LessonDtos {
             String googleSyncError,
             Instant createdAt
     ) {
-        static LessonResponse from(Lesson lesson) {
+        public static LessonResponse from(Lesson lesson) {
             return new LessonResponse(
                     lesson.getId(),
                     lesson.getLessonSeries() == null ? null : lesson.getLessonSeries().getId(),
@@ -125,7 +125,7 @@ public final class LessonDtos {
             String googleSyncError,
             List<LessonResponse> lessons
     ) {
-        static RecurringLessonResponse from(LessonSeries series, List<Lesson> lessons) {
+        public static RecurringLessonResponse from(LessonSeries series, List<Lesson> lessons) {
             return new RecurringLessonResponse(
                     series.getId(),
                     series.getRecurrenceRule(),

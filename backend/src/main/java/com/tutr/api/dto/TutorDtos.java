@@ -61,7 +61,7 @@ public final class TutorDtos {
             @JsonProperty("isPublic")
             boolean isPublic
     ) {
-        static TutorProfileResponse from(TutorProfile profile) {
+        public static TutorProfileResponse from(TutorProfile profile) {
             return new TutorProfileResponse(
                     profile.getId(),
                     profile.getDisplayName(),
