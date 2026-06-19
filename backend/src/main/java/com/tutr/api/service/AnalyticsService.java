@@ -57,6 +57,7 @@ public class AnalyticsService {
     private static final int LAZY_RECURRING_LOOKBACK_DAYS = 180;
     private static final int LAZY_RECURRING_LOOKAHEAD_DAYS = 365;
     private static final int MAX_LAZY_OCCURRENCES_PER_SERIES = 104;
+    private static final int REVENUE_POINT_COUNT = 12;
 
     private final LessonRepository lessons;
     private final LessonSeriesRepository lessonSeries;
@@ -65,6 +66,7 @@ public class AnalyticsService {
     @Transactional(readOnly = true)
     public AnalyticsSummary summary(User tutor, RevenuePeriod period) {
         List<AnalyticsLesson> all = analyticsLessons(tutor);
+        List<ImportedEarning> imported = importedEarnings.findByTutorOrderByStartDateDesc(tutor);
         LocalDate today = LocalDate.now(ANALYTICS_TIME_ZONE);
 
         Map<String, RevenueTotals> revenue = all.stream()
@@ -73,9 +75,9 @@ public class AnalyticsService {
                         lesson -> revenueKey(lesson, period),
                         Collectors.mapping(this::revenueTotals, Collectors.reducing(RevenueTotals.ZERO, RevenueTotals::add))
                 ));
-        importedEarnings.findByTutorOrderByStartDateDesc(tutor).forEach(imported -> {
-            String key = revenueKey(imported.getStartDate(), period);
-            RevenueTotals importedTotals = new RevenueTotals(imported.getWeeklyIncome(), imported.getWeeklyIncome(), BigDecimal.ZERO);
+        imported.forEach(earning -> {
+            String key = revenueKey(earning.getStartDate(), period);
+            RevenueTotals importedTotals = new RevenueTotals(earning.getWeeklyIncome(), earning.getWeeklyIncome(), BigDecimal.ZERO);
             revenue.merge(key, importedTotals, RevenueTotals::add);
         });
         RevenueTotals currentPeriod = revenue.getOrDefault(revenueKey(today, period), RevenueTotals.ZERO);
@@ -88,16 +90,7 @@ public class AnalyticsService {
                 all.stream().filter(lesson -> lesson.status() == LessonStatus.COMPLETED).count(),
                 all.stream().filter(lesson -> lesson.status() == LessonStatus.SCHEDULED).count(),
                 all.stream().filter(lesson -> lesson.status() == LessonStatus.CANCELLED).count(),
-                revenue.entrySet().stream()
-                        .sorted(Map.Entry.comparingByKey(Comparator.naturalOrder()))
-                        .skip(Math.max(0, revenue.size() - 12L))
-                        .map(entry -> new RevenuePoint(
-                                entry.getKey(),
-                                entry.getValue().expectedRevenue(),
-                                entry.getValue().paidRevenue(),
-                                entry.getValue().outstandingRevenue()
-                        ))
-                        .toList()
+                revenuePoints(revenue, imported, today, period)
         );
     }
 
@@ -448,6 +441,77 @@ public class AnalyticsService {
         return lesson.paymentStatus() == PaymentStatus.PAID
                 ? new RevenueTotals(amount, amount, BigDecimal.ZERO)
                 : new RevenueTotals(amount, BigDecimal.ZERO, amount);
+    }
+
+    private List<RevenuePoint> revenuePoints(Map<String, RevenueTotals> revenue, List<ImportedEarning> imported, LocalDate today, RevenuePeriod period) {
+        if (period == RevenuePeriod.WEEKLY) {
+            LocalDate weekStart = imported.stream()
+                    .map(earning -> earning.getStartDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))
+                    .max(Comparator.naturalOrder())
+                    .map(latestImportedWeek -> latestImportedWeek.minusWeeks(REVENUE_POINT_COUNT - 1L))
+                    .orElseGet(() -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));
+            List<RevenuePoint> points = new ArrayList<>();
+            for (int i = 0; i < REVENUE_POINT_COUNT; i++) {
+                String key = weekStart.plusWeeks(i).toString();
+                RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
+                points.add(new RevenuePoint(
+                        key,
+                        totals.expectedRevenue(),
+                        totals.paidRevenue(),
+                        totals.outstandingRevenue()
+                ));
+            }
+            return points;
+        }
+        if (period == RevenuePeriod.MONTHLY) {
+            LocalDate monthStart = imported.stream()
+                    .map(earning -> earning.getStartDate().withDayOfMonth(1))
+                    .max(Comparator.naturalOrder())
+                    .map(latestImportedMonth -> latestImportedMonth.minusMonths(REVENUE_POINT_COUNT - 1L))
+                    .orElseGet(() -> today.withDayOfMonth(1));
+            List<RevenuePoint> points = new ArrayList<>();
+            for (int i = 0; i < REVENUE_POINT_COUNT; i++) {
+                String key = monthStart.plusMonths(i).toString().substring(0, 7);
+                RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
+                points.add(new RevenuePoint(
+                        key,
+                        totals.expectedRevenue(),
+                        totals.paidRevenue(),
+                        totals.outstandingRevenue()
+                ));
+            }
+            return points;
+        }
+        if (period == RevenuePeriod.YEARLY) {
+            int startYear = imported.stream()
+                    .map(earning -> earning.getStartDate().getYear())
+                    .max(Comparator.naturalOrder())
+                    .map(latestImportedYear -> latestImportedYear - REVENUE_POINT_COUNT + 1)
+                    .orElse(today.getYear());
+            List<RevenuePoint> points = new ArrayList<>();
+            for (int i = 0; i < REVENUE_POINT_COUNT; i++) {
+                String key = String.valueOf(startYear + i);
+                RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
+                points.add(new RevenuePoint(
+                        key,
+                        totals.expectedRevenue(),
+                        totals.paidRevenue(),
+                        totals.outstandingRevenue()
+                ));
+            }
+            return points;
+        }
+
+        return revenue.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.naturalOrder()))
+                .skip(Math.max(0, revenue.size() - (long) REVENUE_POINT_COUNT))
+                .map(entry -> new RevenuePoint(
+                        entry.getKey(),
+                        entry.getValue().expectedRevenue(),
+                        entry.getValue().paidRevenue(),
+                        entry.getValue().outstandingRevenue()
+                ))
+                .toList();
     }
 
     private String revenueKey(AnalyticsLesson lesson, RevenuePeriod period) {
