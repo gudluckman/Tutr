@@ -25,6 +25,7 @@ import {
 import type { ReactNode } from 'react';
 import { FormEvent, useState } from 'react';
 import { createStudent, deleteStudent, listStudents, updateStudent } from '../../api/studentApi';
+import { ConfirmDeleteDialog } from '../../components/ui/ConfirmDeleteDialog';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { Student, StudentPayload } from '../../types/student';
@@ -37,6 +38,7 @@ export function StudentsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
   const [form, setForm] = useState<StudentPayload>(emptyStudent);
   const [subjectError, setSubjectError] = useState(false);
   const students = useQuery({ queryKey: ['students'], queryFn: listStudents });
@@ -47,7 +49,13 @@ export function StudentsPage() {
       resetForm();
     },
   });
-  const remove = useMutation({ mutationFn: deleteStudent, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['students'] }) });
+  const remove = useMutation({
+    mutationFn: deleteStudent,
+    onSuccess: () => {
+      setDeletingStudent(null);
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+    },
+  });
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -136,6 +144,15 @@ export function StudentsPage() {
       <ErrorAlert className="mb-6" error={students.error} fallback="Could not load students. Please refresh the page." />
       <ErrorAlert className="mb-6" error={remove.error} fallback="Could not delete the student. Please try again." />
 
+      <ConfirmDeleteDialog
+        open={Boolean(deletingStudent)}
+        title="Delete student?"
+        message={deletingStudent ? `Are you sure you want to delete ${deletingStudent.name}? This cannot be undone.` : ''}
+        isDeleting={remove.isPending}
+        onClose={() => setDeletingStudent(null)}
+        onConfirm={() => deletingStudent && remove.mutate(deletingStudent.id)}
+      />
+
       <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
         <Table sx={{ minWidth: 760 }}>
           <TableHead>
@@ -164,7 +181,7 @@ export function StudentsPage() {
                   <IconButton size="small" onClick={() => edit(student)} aria-label={`Edit ${student.name}`}>
                     <Icon name="edit" className="h-4 w-4" />
                   </IconButton>
-                  <IconButton size="small" color="error" onClick={() => remove.mutate(student.id)} aria-label={`Delete ${student.name}`}>
+                  <IconButton size="small" color="error" onClick={() => setDeletingStudent(student)} aria-label={`Delete ${student.name}`}>
                     <Icon name="trash" className="h-4 w-4" />
                   </IconButton>
                 </TableCell>

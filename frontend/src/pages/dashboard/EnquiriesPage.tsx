@@ -4,9 +4,7 @@ import {
   Button,
   Chip,
   Dialog,
-  DialogActions,
   DialogContent,
-  DialogTitle,
   FormControl,
   IconButton,
   InputLabel,
@@ -21,6 +19,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { convertEnquiryToStudent, deleteEnquiry, listEnquiries, updateEnquiryStatus } from '../../api/enquiryApi';
+import { ConfirmDeleteDialog } from '../../components/ui/ConfirmDeleteDialog';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { Enquiry, EnquiryStatus } from '../../types/enquiry';
@@ -222,42 +221,14 @@ export function EnquiriesPage() {
         )}
       </Dialog>
 
-      <Dialog
+      <ConfirmDeleteDialog
         open={Boolean(deleting)}
-        onClose={remove.isPending ? undefined : () => setDeleting(null)}
-        fullWidth
-        maxWidth="xs"
-        aria-labelledby="delete-enquiry-title"
-        slotProps={{ paper: { sx: { borderRadius: 2 } } }}
-      >
-        <DialogTitle id="delete-enquiry-title" sx={{ pb: 0.75, pr: 6, fontSize: 20, fontWeight: 600 }}>
-          Delete enquiry?
-          <IconButton
-            aria-label="Close delete dialog"
-            disabled={remove.isPending}
-            onClick={() => setDeleting(null)}
-            sx={{ position: 'absolute', right: 12, top: 12 }}
-          >
-            <Icon name="x" className="h-5 w-5" />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
-            {deleting ? `Remove the enquiry from ${deleting.parentName}? This cannot be undone.` : ''}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button disabled={remove.isPending} onClick={() => setDeleting(null)}>Cancel</Button>
-          <Button
-            color="error"
-            disabled={remove.isPending || !deleting}
-            variant="contained"
-            onClick={() => deleting && remove.mutate(deleting.id)}
-          >
-            {remove.isPending ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        title="Delete enquiry?"
+        message={deleting ? `Are you sure you want to delete the enquiry from ${deleting.parentName}? This cannot be undone.` : ''}
+        isDeleting={remove.isPending}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => deleting && remove.mutate(deleting.id)}
+      />
     </Box>
   );
 }

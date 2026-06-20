@@ -392,6 +392,9 @@ services, DTOs, entities, repositories, and enums.
   easier to scan and tap.
 - Made earnings filters expandable on mobile and added a labelled mobile
   `Export CSV` action while keeping the desktop tooltip/icon behavior.
+- Added a reusable delete confirmation dialog and applied it to students,
+  enquiries, and lessons, with entity-specific confirmation messages and
+  recurring lesson delete choices preserved.
 - Removed daily income bars from the revenue chart so the income-over-time view
   focuses on more meaningful periods.
 - Added recurring lesson deletion choices for single event, following events,
