@@ -247,7 +247,6 @@ public class LessonService {
     private Lesson transientLesson(VirtualOccurrence occurrence) {
         LessonSeries series = occurrence.series();
         Lesson lesson = new Lesson();
-        lesson.setId(occurrenceId(series, occurrence.lessonDate()));
         lesson.setTutor(series.getTutor());
         lesson.setStudent(series.getStudent());
         lesson.setLessonSeries(series);
