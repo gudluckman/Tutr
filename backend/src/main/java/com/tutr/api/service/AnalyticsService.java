@@ -90,7 +90,7 @@ public class AnalyticsService {
                 all.stream().filter(lesson -> lesson.status() == LessonStatus.COMPLETED).count(),
                 all.stream().filter(lesson -> lesson.status() == LessonStatus.SCHEDULED).count(),
                 all.stream().filter(lesson -> lesson.status() == LessonStatus.CANCELLED).count(),
-                revenuePoints(revenue, imported, today, period)
+                revenuePoints(revenue, today, period)
         );
     }
 
@@ -119,7 +119,7 @@ public class AnalyticsService {
         return analyticsLessons;
     }
 
-    public EarningsResponse earnings(User tutor, int requestedPage, int requestedPageSize, Integer requestedYear, Integer requestedMonth) {
+    public EarningsResponse earnings(User tutor, int requestedPage, int requestedPageSize, Integer requestedYear, Integer requestedMonth, Integer requestedFinancialYearStart) {
         int pageSize = Math.max(1, Math.min(requestedPageSize, 52));
         List<WeeklyEarning> allWeeks = weeklyEarnings(tutor);
         List<Integer> availableYears = allWeeks.stream()
@@ -127,13 +127,19 @@ public class AnalyticsService {
                 .distinct()
                 .sorted(Comparator.reverseOrder())
                 .toList();
+        List<Integer> availableFinancialYearStarts = allWeeks.stream()
+                .map(week -> financialYearStart(week.weekStart()))
+                .distinct()
+                .sorted(Comparator.reverseOrder())
+                .toList();
         List<String> availableMonths = allWeeks.stream()
+                .filter(week -> requestedFinancialYearStart == null)
                 .filter(week -> requestedYear == null || week.weekStart().getYear() == requestedYear)
                 .map(week -> week.weekStart().withDayOfMonth(1).toString().substring(0, 7))
                 .distinct()
                 .sorted(Comparator.reverseOrder())
                 .toList();
-        List<WeeklyEarning> filteredWeeks = filterWeeklyEarnings(allWeeks, requestedYear, requestedMonth);
+        List<WeeklyEarning> filteredWeeks = filterWeeklyEarnings(allWeeks, requestedYear, requestedMonth, requestedFinancialYearStart);
         BigDecimal combinedTotalEarnings = filteredWeeks.stream()
                 .map(WeeklyEarning::income)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -154,6 +160,7 @@ public class AnalyticsService {
                 combinedAverageHourlyRate,
                 filteredWeeks.subList(fromIndex, toIndex),
                 availableYears,
+                availableFinancialYearStarts,
                 availableMonths,
                 page,
                 pageSize,
@@ -162,8 +169,8 @@ public class AnalyticsService {
         );
     }
 
-    public String exportEarningsCsv(User tutor, Integer year, Integer month) {
-        List<WeeklyEarning> weeks = filterWeeklyEarnings(weeklyEarnings(tutor), year, month);
+    public String exportEarningsCsv(User tutor, Integer year, Integer month, Integer financialYearStart) {
+        List<WeeklyEarning> weeks = filterWeeklyEarnings(weeklyEarnings(tutor), year, month, financialYearStart);
         if (weeks.isEmpty()) {
             return "";
         }
@@ -188,11 +195,16 @@ public class AnalyticsService {
         return csv.toString();
     }
 
-    private List<WeeklyEarning> filterWeeklyEarnings(List<WeeklyEarning> weeks, Integer year, Integer month) {
+    private List<WeeklyEarning> filterWeeklyEarnings(List<WeeklyEarning> weeks, Integer year, Integer month, Integer financialYearStart) {
         return weeks.stream()
-                .filter(week -> year == null || week.weekStart().getYear() == year)
-                .filter(week -> month == null || week.weekStart().getMonthValue() == month)
+                .filter(week -> financialYearStart == null || financialYearStart(week.weekStart()) == financialYearStart)
+                .filter(week -> financialYearStart != null || year == null || week.weekStart().getYear() == year)
+                .filter(week -> financialYearStart != null || month == null || week.weekStart().getMonthValue() == month)
                 .toList();
+    }
+
+    private int financialYearStart(LocalDate date) {
+        return date.getMonthValue() >= 7 ? date.getYear() : date.getYear() - 1;
     }
 
     private List<WeeklyEarning> weeklyEarnings(User tutor) {
@@ -443,16 +455,30 @@ public class AnalyticsService {
                 : new RevenueTotals(amount, BigDecimal.ZERO, amount);
     }
 
-    private List<RevenuePoint> revenuePoints(Map<String, RevenueTotals> revenue, List<ImportedEarning> imported, LocalDate today, RevenuePeriod period) {
+    private List<RevenuePoint> revenuePoints(Map<String, RevenueTotals> revenue, LocalDate today, RevenuePeriod period) {
         if (period == RevenuePeriod.WEEKLY) {
-            LocalDate weekStart = imported.stream()
-                    .map(earning -> earning.getStartDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))
-                    .max(Comparator.naturalOrder())
-                    .map(latestImportedWeek -> latestImportedWeek.minusWeeks(REVENUE_POINT_COUNT - 1L))
-                    .orElseGet(() -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)));
+            LocalDate currentWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+            List<String> futureRevenueWeeks = revenue.keySet().stream()
+                    .map(LocalDate::parse)
+                    .filter(week -> week.isAfter(currentWeek))
+                    .sorted()
+                    .limit(REVENUE_POINT_COUNT - 1L)
+                    .map(LocalDate::toString)
+                    .toList();
+            int pastAndCurrentPointCount = REVENUE_POINT_COUNT - futureRevenueWeeks.size();
+            LocalDate weekStart = currentWeek.minusWeeks(pastAndCurrentPointCount - 1L);
             List<RevenuePoint> points = new ArrayList<>();
-            for (int i = 0; i < REVENUE_POINT_COUNT; i++) {
+            for (int i = 0; i < pastAndCurrentPointCount; i++) {
                 String key = weekStart.plusWeeks(i).toString();
+                RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
+                points.add(new RevenuePoint(
+                        key,
+                        totals.expectedRevenue(),
+                        totals.paidRevenue(),
+                        totals.outstandingRevenue()
+                ));
+            }
+            for (String key : futureRevenueWeeks) {
                 RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
                 points.add(new RevenuePoint(
                         key,
@@ -464,14 +490,19 @@ public class AnalyticsService {
             return points;
         }
         if (period == RevenuePeriod.MONTHLY) {
-            LocalDate monthStart = imported.stream()
-                    .map(earning -> earning.getStartDate().withDayOfMonth(1))
-                    .max(Comparator.naturalOrder())
-                    .map(latestImportedMonth -> latestImportedMonth.minusMonths(REVENUE_POINT_COUNT - 1L))
-                    .orElseGet(() -> today.withDayOfMonth(1));
+            LocalDate currentMonth = today.withDayOfMonth(1);
+            List<LocalDate> revenueMonths = revenue.keySet().stream()
+                    .map(key -> LocalDate.parse(key + "-01"))
+                    .sorted()
+                    .toList();
+            LocalDate earliestRecentRevenueMonth = revenueMonths.stream()
+                    .filter(month -> !month.isAfter(currentMonth))
+                    .filter(month -> !month.isBefore(currentMonth.minusMonths(REVENUE_POINT_COUNT - 1L)))
+                    .findFirst()
+                    .orElse(currentMonth);
             List<RevenuePoint> points = new ArrayList<>();
-            for (int i = 0; i < REVENUE_POINT_COUNT; i++) {
-                String key = monthStart.plusMonths(i).toString().substring(0, 7);
+            for (LocalDate month = earliestRecentRevenueMonth; !month.isAfter(currentMonth); month = month.plusMonths(1)) {
+                String key = month.toString().substring(0, 7);
                 RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
                 points.add(new RevenuePoint(
                         key,
@@ -480,17 +511,35 @@ public class AnalyticsService {
                         totals.outstandingRevenue()
                 ));
             }
+            revenueMonths.stream()
+                    .filter(month -> month.isAfter(currentMonth))
+                    .limit(Math.max(0, REVENUE_POINT_COUNT - points.size()))
+                    .forEach(month -> {
+                        String key = month.toString().substring(0, 7);
+                        RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
+                        points.add(new RevenuePoint(
+                                key,
+                                totals.expectedRevenue(),
+                                totals.paidRevenue(),
+                                totals.outstandingRevenue()
+                        ));
+                    });
             return points;
         }
         if (period == RevenuePeriod.YEARLY) {
-            int startYear = imported.stream()
-                    .map(earning -> earning.getStartDate().getYear())
-                    .max(Comparator.naturalOrder())
-                    .map(latestImportedYear -> latestImportedYear - REVENUE_POINT_COUNT + 1)
-                    .orElse(today.getYear());
+            int currentYear = today.getYear();
+            List<Integer> revenueYears = revenue.keySet().stream()
+                    .map(Integer::parseInt)
+                    .sorted()
+                    .toList();
+            int startYear = revenueYears.stream()
+                    .filter(year -> year <= currentYear)
+                    .filter(year -> year >= currentYear - REVENUE_POINT_COUNT + 1)
+                    .findFirst()
+                    .orElse(currentYear);
             List<RevenuePoint> points = new ArrayList<>();
-            for (int i = 0; i < REVENUE_POINT_COUNT; i++) {
-                String key = String.valueOf(startYear + i);
+            for (int year = startYear; year <= currentYear; year++) {
+                String key = String.valueOf(year);
                 RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
                 points.add(new RevenuePoint(
                         key,
@@ -499,6 +548,19 @@ public class AnalyticsService {
                         totals.outstandingRevenue()
                 ));
             }
+            revenueYears.stream()
+                    .filter(year -> year > currentYear)
+                    .limit(Math.max(0, REVENUE_POINT_COUNT - points.size()))
+                    .forEach(year -> {
+                        String key = String.valueOf(year);
+                        RevenueTotals totals = revenue.getOrDefault(key, RevenueTotals.ZERO);
+                        points.add(new RevenuePoint(
+                                key,
+                                totals.expectedRevenue(),
+                                totals.paidRevenue(),
+                                totals.outstandingRevenue()
+                        ));
+                    });
             return points;
         }
 

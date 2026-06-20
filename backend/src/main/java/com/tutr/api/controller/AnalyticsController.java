@@ -44,18 +44,20 @@ public class AnalyticsController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "8") int pageSize,
             @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) Integer month
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer financialYearStart
     ) {
-        return service.earnings(user, page, pageSize, year, month);
+        return service.earnings(user, page, pageSize, year, month, financialYearStart);
     }
 
     @GetMapping(value = "/earnings/export", produces = "text/csv")
     ResponseEntity<String> exportEarnings(
             @AuthenticationPrincipal User user,
             @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) Integer month
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer financialYearStart
     ) {
-        String csv = service.exportEarningsCsv(user, year, month);
+        String csv = service.exportEarningsCsv(user, year, month, financialYearStart);
         if (csv.isBlank()) {
             return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
         }

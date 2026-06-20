@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Collapse,
   Dialog,
   DialogContent,
   FormControl,
@@ -43,9 +44,11 @@ export function EarningsPage() {
   const [replaceExistingImports, setReplaceExistingImports] = useState(false);
   const [importProgress, setImportProgress] = useState<number | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const yearFilter = parseYearFilter(selectedYear);
   const earnings = useQuery({
     queryKey: ['earnings', page, selectedYear, selectedMonth],
-    queryFn: () => getEarnings(page, numberOrUndefined(selectedYear), numberOrUndefined(selectedMonth)),
+    queryFn: () => getEarnings(page, yearFilter.calendarYear, numberOrUndefined(selectedMonth), yearFilter.financialYearStart),
     placeholderData: (previousData) => previousData,
   });
   const importCsv = useMutation({
@@ -72,7 +75,7 @@ export function EarningsPage() {
     },
   });
   const exportCsv = useMutation({
-    mutationFn: () => exportEarningsCsv(numberOrUndefined(selectedYear), numberOrUndefined(selectedMonth)),
+    mutationFn: () => exportEarningsCsv(yearFilter.calendarYear, numberOrUndefined(selectedMonth), yearFilter.financialYearStart),
     onSuccess: (blob) => {
       if (!blob) {
         setExportMessage('No earning weeks to export yet.');
@@ -88,11 +91,8 @@ export function EarningsPage() {
     },
   });
   const data = earnings.data;
-  const rangeLabel = selectedYear
-    ? selectedMonth
-      ? monthLabel(`${selectedYear}-${selectedMonth.padStart(2, '0')}`)
-      : selectedYear
-    : 'all time';
+  const rangeLabel = earningsRangeLabel(selectedYear, selectedMonth);
+  const activeFilterCount = [selectedYear, selectedMonth].filter(Boolean).length;
 
   const handleExport = () => {
     if (!data || data.totalWeeks === 0) {
@@ -108,6 +108,73 @@ export function EarningsPage() {
     setReplaceExistingImports(false);
     setImportProgress(null);
   };
+
+  const renderEarningsControls = (idPrefix: string, showExportLabel = false) => (
+    <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'flex-end', gap: 1.5 }}>
+      <FormControl size="small" sx={{ minWidth: 132 }}>
+        <InputLabel id={`${idPrefix}-earnings-year-label`}>Year</InputLabel>
+        <Select
+          labelId={`${idPrefix}-earnings-year-label`}
+          label="Year"
+          value={selectedYear}
+          onChange={(event) => {
+            setSelectedYear(event.target.value);
+            setSelectedMonth('');
+            setPage(0);
+          }}
+        >
+          <MenuItem value="">All time</MenuItem>
+          {data?.availableYears.map((year) => <MenuItem key={`CY:${year}`} value={`CY:${year}`}>{year}</MenuItem>)}
+          {Boolean(data?.availableFinancialYearStarts.length) && <MenuItem disabled>Australian financial years</MenuItem>}
+          {data?.availableFinancialYearStarts.map((year) => <MenuItem key={`FY:${year}`} value={`FY:${year}`}>{financialYearLabel(year)}</MenuItem>)}
+        </Select>
+      </FormControl>
+      <FormControl size="small" sx={{ minWidth: 148 }} disabled={!yearFilter.calendarYear}>
+        <InputLabel id={`${idPrefix}-earnings-month-label`}>Month</InputLabel>
+        <Select
+          labelId={`${idPrefix}-earnings-month-label`}
+          label="Month"
+          value={selectedMonth}
+          onChange={(event) => {
+            setSelectedMonth(event.target.value);
+            setPage(0);
+          }}
+        >
+          <MenuItem value="">All months</MenuItem>
+          {data?.availableMonths.map((month) => (
+            <MenuItem key={month} value={month.slice(5, 7)}>{monthLabel(month)}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+        Page {data?.totalPages ? (data.page + 1) : 0} of {data?.totalPages ?? 0}
+      </Typography>
+      {showExportLabel ? (
+        <Button
+          type="button"
+          variant="outlined"
+          size="small"
+          startIcon={<Icon name="csvDownload" className="h-4 w-4" />}
+          disabled={earnings.isLoading || exportCsv.isPending}
+          onClick={handleExport}
+          sx={{ alignSelf: 'flex-start' }}
+        >
+          Export CSV
+        </Button>
+      ) : (
+        <IconButton
+          type="button"
+          title="Export earnings CSV"
+          aria-label="Export earnings CSV"
+          disabled={earnings.isLoading || exportCsv.isPending}
+          onClick={handleExport}
+          sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}
+        >
+          <Icon name="csvDownload" className="h-4 w-4" />
+        </IconButton>
+      )}
+    </Stack>
+  );
 
   return (
     <Box sx={{ p: { xs: 2, sm: 4 } }}>
@@ -135,10 +202,10 @@ export function EarningsPage() {
         <OverviewStat icon="dashboard" label="Average hourly rate" value={`${money.format(data?.averageHourlyRate ?? 0)}/hr`} />
       </Box>
 
-      <Paper variant="outlined" sx={{ mb: 4, borderColor: 'success.light', bgcolor: 'success.50', p: 2, borderRadius: 2 }}>
+      <Paper variant="outlined" sx={{ mb: 4, borderColor: 'divider', bgcolor: 'background.paper', p: 2, borderRadius: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
           <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-            <Box sx={{ display: 'grid', placeItems: 'center', width: 36, height: 36, borderRadius: 1.5, bgcolor: 'white', color: 'primary.main', flexShrink: 0 }}>
+            <Box sx={{ display: 'grid', placeItems: 'center', width: 36, height: 36, borderRadius: 1.5, bgcolor: 'action.hover', color: 'primary.main', flexShrink: 0 }}>
               <Icon name="historicalStats" className="h-4 w-4" />
             </Box>
             <Box sx={{ minWidth: 0 }}>
@@ -147,13 +214,13 @@ export function EarningsPage() {
             </Box>
           </Stack>
           <Stack direction="row" sx={{ gap: 1 }}>
-            <IconButton component="a" href={csvTemplateUrl} download="tutr-earnings-template.csv" title="Download CSV template" aria-label="Download CSV template" sx={{ bgcolor: 'white' }}>
+            <IconButton component="a" href={csvTemplateUrl} download="tutr-earnings-template.csv" title="Download CSV template" aria-label="Download CSV template" sx={{ bgcolor: 'action.hover' }}>
               <Icon name="download" className="h-4 w-4" />
             </IconButton>
             <IconButton
               title="Import earnings CSV"
               aria-label="Import earnings CSV"
-              sx={{ bgcolor: 'white' }}
+              sx={{ bgcolor: 'action.hover' }}
               onClick={() => {
                 setShowImportModal(true);
                 setImportResult(null);
@@ -192,54 +259,30 @@ export function EarningsPage() {
             <Typography variant="h6" sx={{ fontWeight: 600 }}>Weekly income</Typography>
             <Typography variant="body2" color="text.secondary">{data?.totalWeeks ?? 0} earning weeks recorded for {rangeLabel}</Typography>
           </Box>
-          <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'flex-end', gap: 1.5 }}>
-            <FormControl size="small" sx={{ minWidth: 132 }}>
-              <InputLabel id="earnings-year-label">Year</InputLabel>
-              <Select
-                labelId="earnings-year-label"
-                label="Year"
-                value={selectedYear}
-                onChange={(event) => {
-                  setSelectedYear(event.target.value);
-                  setSelectedMonth('');
-                  setPage(0);
-                }}
-              >
-                <MenuItem value="">All time</MenuItem>
-                {data?.availableYears.map((year) => <MenuItem key={year} value={String(year)}>{year}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 148 }} disabled={!selectedYear}>
-              <InputLabel id="earnings-month-label">Month</InputLabel>
-              <Select
-                labelId="earnings-month-label"
-                label="Month"
-                value={selectedMonth}
-                onChange={(event) => {
-                  setSelectedMonth(event.target.value);
-                  setPage(0);
-                }}
-              >
-                <MenuItem value="">All months</MenuItem>
-                {data?.availableMonths.map((month) => (
-                  <MenuItem key={month} value={month.slice(5, 7)}>{monthLabel(month)}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-              Page {data?.totalPages ? (data.page + 1) : 0} of {data?.totalPages ?? 0}
+          <Stack direction="row" sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {activeFilterCount ? `${activeFilterCount} active` : 'All earnings'}
             </Typography>
-            <IconButton
-              type="button"
-              title="Export earnings CSV"
-              aria-label="Export earnings CSV"
-              disabled={earnings.isLoading || exportCsv.isPending}
-              onClick={handleExport}
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => setMobileFiltersOpen((current) => !current)}
+              aria-expanded={mobileFiltersOpen}
+              endIcon={<Icon name="chevronDown" className="h-4 w-4" style={{ transform: mobileFiltersOpen ? 'rotate(180deg)' : undefined, transition: 'transform 160ms ease' }} />}
+              sx={{ whiteSpace: 'nowrap' }}
             >
-              <Icon name="csvDownload" className="h-4 w-4" />
-            </IconButton>
+              Filters
+            </Button>
           </Stack>
+          <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+            {renderEarningsControls('desktop')}
+          </Box>
         </Stack>
+        <Collapse in={mobileFiltersOpen} unmountOnExit sx={{ display: { md: 'none' } }}>
+          <Box sx={{ px: 2, pt: 1.5, pb: 2 }}>
+            {renderEarningsControls('mobile', true)}
+          </Box>
+        </Collapse>
 
         <TableContainer sx={{ opacity: earnings.isFetching ? 0.7 : 1, transition: 'opacity 160ms ease' }}>
           <Table sx={{ minWidth: 620 }}>
@@ -436,16 +479,46 @@ function exportDateStamp() {
 }
 
 function exportFilename(year: string, month: string) {
-  const range = year
-    ? month
-      ? `${year}-${month.padStart(2, '0')}`
-      : year
-    : 'all_time';
+  const yearFilter = parseYearFilter(year);
+  const range = yearFilter.financialYearStart
+    ? `FY_${yearFilter.financialYearStart}-${String(yearFilter.financialYearStart + 1).slice(-2)}`
+    : yearFilter.calendarYear
+      ? month
+        ? `${yearFilter.calendarYear}-${month.padStart(2, '0')}`
+        : String(yearFilter.calendarYear)
+      : 'all_time';
   return `tutr_earnings_${range}_until_${exportDateStamp()}.csv`;
 }
 
 function monthLabel(month: string) {
   return new Date(`${month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+}
+
+function financialYearLabel(startYear: number) {
+  return `FY ${startYear}-${String(startYear + 1).slice(-2)}`;
+}
+
+function earningsRangeLabel(year: string, month: string) {
+  const yearFilter = parseYearFilter(year);
+  if (yearFilter.financialYearStart) {
+    return financialYearLabel(yearFilter.financialYearStart);
+  }
+  if (yearFilter.calendarYear) {
+    return month
+      ? monthLabel(`${yearFilter.calendarYear}-${month.padStart(2, '0')}`)
+      : String(yearFilter.calendarYear);
+  }
+  return 'all time';
+}
+
+function parseYearFilter(value: string) {
+  if (value.startsWith('FY:')) {
+    return { calendarYear: undefined, financialYearStart: Number(value.slice(3)) || undefined };
+  }
+  if (value.startsWith('CY:')) {
+    return { calendarYear: Number(value.slice(3)) || undefined, financialYearStart: undefined };
+  }
+  return { calendarYear: numberOrUndefined(value), financialYearStart: undefined };
 }
 
 function numberOrUndefined(value: string) {

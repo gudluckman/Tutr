@@ -368,6 +368,56 @@ services, DTOs, entities, repositories, and enums.
 - Update any IDE bookmarks or open-file references that still point to the old
   backend feature package paths.
 
+## 2026-06-20 - Dashboard Calendar And Mobile Polish
+
+### Completed
+
+- Refined the lesson form experience with expandable notification controls,
+  cleaner dropdown alignment, and less distracting form highlights.
+- Removed partial payment from active lesson payment choices and standardized
+  unpaid lessons on yellow styling.
+- Reworked lesson detail modal content so generated student/year/subject titles
+  are not repeated, while custom titles still appear clearly.
+- Split the large lessons page by extracting the calendar and lesson-detail UI
+  into `LessonCalendar.tsx`.
+- Added persistent lesson calendar view preference so daily, weekly, or monthly
+  stays selected between visits.
+- Redesigned the daily lesson view into a timeline-style layout with lesson
+  cards, free-time dividers, actual notes/homework content, meeting/resource
+  actions, and light grey calendar background styling.
+- Improved weekly and monthly calendar contrast, today labelling, card colors,
+  and lesson modal presentation.
+- Made lessons search and filters expandable on mobile.
+- Improved enquiry card spacing on mobile so conversion and status controls are
+  easier to scan and tap.
+- Made earnings filters expandable on mobile and added a labelled mobile
+  `Export CSV` action while keeping the desktop tooltip/icon behavior.
+- Removed daily income bars from the revenue chart so the income-over-time view
+  focuses on more meaningful periods.
+- Added recurring lesson deletion choices for single event, following events,
+  or full series.
+- Added a scheduled keep-awake workflow for the hosted Render backend and
+  documented the Render free-tier trade-off.
+- Added Supabase storage support planning/configuration for long-term tutor
+  profile image persistence.
+
+### Outcome
+
+The dashboard feels more mobile-friendly and production-ready: lesson calendar
+views are easier to read, filters take less space on small screens, earnings
+controls are clearer, recurring deletions are safer, and hosted beta
+infrastructure is better prepared for free-tier limitations and persistent
+profile media.
+
+### Next
+
+- Smoke-test the lesson calendar daily, weekly, and monthly views on mobile and
+  desktop after deployment.
+- Finish and verify the Supabase storage path for uploaded tutor profile
+  images in production.
+- Revisit exact payment tracking only after the current simplified paid/unpaid
+  workflow has been beta-tested.
+
 ## Current Focus
 
 - Stabilize the beta deployment and verify the full hosted workflow after each

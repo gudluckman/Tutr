@@ -2,9 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   Button,
-  ButtonBase,
-  Dialog,
-  DialogContent,
+  Collapse,
   FormControl,
   IconButton,
   InputAdornment,
@@ -27,28 +25,18 @@ import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { Lesson, LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../types/lesson';
 import type { Student } from '../../types/student';
-import { emptyLesson, emptyRecurring, googleCalendarSyncStorageKey, lessonStatusStyles, paymentStatusStyles } from './lessons/constants';
+import { emptyLesson, emptyRecurring, googleCalendarSyncStorageKey, paymentStatusOptions } from './lessons/constants';
 import { DeleteLessonDialog } from './lessons/DeleteLessonDialog';
 import { GoogleCalendarPanel } from './lessons/GoogleCalendarPanel';
+import { LessonCalendar } from './lessons/LessonCalendar';
 import { RecurringFields, SingleLessonFields } from './lessons/LessonFormFields';
 import { LessonTable } from './lessons/LessonTable';
 import type { CalendarView, FormMode, LessonDeleteScope, LessonsWorkspaceView } from './lessons/types';
 import {
-  addDays,
-  calendarPaymentPalette,
-  calendarRangeLabel,
-  calendarViewDate,
-  isSameDay,
-  isGeneratedLessonTitle,
-  lessonAmount,
-  lessonTimeRange,
   startOfDay,
-  startOfMonthGrid,
-  startOfWeek,
   searchMatcher,
   statusLabel,
   subjectOptionsForStudent,
-  timeLabel,
   toDateTimeLocal,
 } from './lessons/lessonUtils';
 
@@ -70,13 +58,16 @@ const emptyLessonFilters: LessonFiltersState = {
   paymentStatus: '',
 };
 
+const lessonCalendarViewStorageKey = 'tutr.lessonsCalendarView';
+const calendarViews: CalendarView[] = ['DAILY', 'WEEKLY', 'MONTHLY'];
+
 export function LessonsPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [mode, setMode] = useState<FormMode>('single');
   const [workspaceView, setWorkspaceView] = useState<LessonsWorkspaceView>('CALENDAR');
-  const [calendarView, setCalendarView] = useState<CalendarView>('WEEKLY');
+  const [calendarView, setCalendarView] = useState<CalendarView>(() => storedLessonCalendarView());
   const [calendarDate, setCalendarDate] = useState(() => startOfDay(new Date()));
   const [editing, setEditing] = useState<Lesson | null>(null);
   const [deletingLesson, setDeletingLesson] = useState<Lesson | null>(null);
@@ -91,6 +82,10 @@ export function LessonsPage() {
   const lessonList = lessons.data ?? [];
   const studentList = students.data ?? [];
   const filteredLessons = useMemo(() => filterLessons(lessonList, studentList, filters), [filters, lessonList, studentList]);
+
+  useEffect(() => {
+    localStorage.setItem(lessonCalendarViewStorageKey, calendarView);
+  }, [calendarView]);
 
   const save = useMutation({
     mutationFn: () => {
@@ -397,9 +392,11 @@ function LessonFilters({
   const schoolYearOptions = useMemo(() => uniqueOptions(students.map((student) => student.schoolYear)), [students]);
   const subjectOptions = useMemo(() => uniqueOptions(students.flatMap((student) => subjectOptionsForStudent(student))), [students]);
   const hasFilters = Object.values(filters).some(Boolean);
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  return (
-    <Paper variant="outlined" sx={{ mb: 3, p: { xs: 2, sm: 2.5 }, borderRadius: 2 }}>
+  const filterControls = (
+    <>
       <Stack direction={{ xs: 'column', lg: 'row' }} sx={{ alignItems: { xs: 'stretch', lg: 'center' }, gap: 1.5 }}>
         <TextField
           label="Search lessons"
@@ -422,7 +419,7 @@ function LessonFilters({
         <LessonFilterSelect label="Year level" value={filters.schoolYear} onChange={(schoolYear) => onChange({ ...filters, schoolYear })} options={schoolYearOptions} placeholder="All year levels" />
         <LessonFilterSelect label="Subject(s)" value={filters.subject} onChange={(subject) => onChange({ ...filters, subject })} options={subjectOptions} placeholder="All subjects" />
         <LessonFilterSelect label="Lesson status" value={filters.lessonStatus} onChange={(lessonStatus) => onChange({ ...filters, lessonStatus })} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].map((value) => ({ value, label: statusLabel(value) }))} placeholder="All statuses" />
-        <LessonFilterSelect label="Payment" value={filters.paymentStatus} onChange={(paymentStatus) => onChange({ ...filters, paymentStatus })} options={['UNPAID', 'PAID', 'PARTIAL'].map((value) => ({ value, label: statusLabel(value) }))} placeholder="All payments" />
+        <LessonFilterSelect label="Payment" value={filters.paymentStatus} onChange={(paymentStatus) => onChange({ ...filters, paymentStatus })} options={paymentStatusOptions.map((value) => ({ value, label: statusLabel(value) }))} placeholder="All payments" />
       </Stack>
       <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 1.5, mt: 1.5 }}>
         <Typography variant="body2" color="text.secondary">{resultCount} of {lessons.length} lessons shown</Typography>
@@ -430,6 +427,40 @@ function LessonFilters({
           Clear filters
         </Button>
       </Stack>
+    </>
+  );
+
+  return (
+    <Paper variant="outlined" sx={{ mb: 3, p: { xs: 2, sm: 2.5 }, borderRadius: 2 }}>
+      <Stack direction="row" sx={{ display: { xs: 'flex', sm: 'none' }, alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
+        <Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>Search & filters</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {resultCount} of {lessons.length} shown{activeFilterCount ? ` - ${activeFilterCount} active` : ''}
+          </Typography>
+        </Box>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+          {hasFilters && (
+            <Button color="inherit" size="small" onClick={onClear}>
+              Clear
+            </Button>
+          )}
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => setMobileFiltersOpen((current) => !current)}
+            aria-expanded={mobileFiltersOpen}
+            endIcon={<Icon name="chevronDown" className="h-4 w-4" style={{ transform: mobileFiltersOpen ? 'rotate(180deg)' : undefined, transition: 'transform 160ms ease' }} />}
+            sx={{ whiteSpace: 'nowrap' }}
+          >
+            Filters
+          </Button>
+        </Stack>
+      </Stack>
+      <Collapse in={mobileFiltersOpen} unmountOnExit sx={{ display: { sm: 'none' } }}>
+        <Box sx={{ mt: 2 }}>{filterControls}</Box>
+      </Collapse>
+      <Box sx={{ display: { xs: 'none', sm: 'block' } }}>{filterControls}</Box>
     </Paper>
   );
 }
@@ -491,803 +522,9 @@ function lessonLinksForForm(lesson: Lesson) {
   return [];
 }
 
-function LessonCalendar({
-  view,
-  date,
-  lessons,
-  students,
-  isUpdating,
-  onViewChange,
-  onDateChange,
-  onEdit,
-  onDelete,
-  onUpdateStatus,
-  onUpdatePaymentStatus,
-}: {
-  view: CalendarView;
-  date: Date;
-  lessons: Lesson[];
-  students: Student[];
-  isUpdating: (lesson: Lesson) => boolean;
-  onViewChange: (view: CalendarView) => void;
-  onDateChange: (date: Date) => void;
-  onEdit: (lesson: Lesson) => void;
-  onDelete: (lesson: Lesson) => void;
-  onUpdateStatus: (id: string, status: LessonStatus) => void;
-  onUpdatePaymentStatus: (id: string, status: PaymentStatus) => void;
-}) {
-  const sortedLessons = useMemo(() => [...lessons].sort((a, b) => new Date(a.lessonDate).getTime() - new Date(b.lessonDate).getTime()), [lessons]);
-  const move = (direction: number) => onDateChange(calendarViewDate(date, view, direction));
-
-  return (
-    <Paper component="section" variant="outlined" sx={{ mb: 4, overflow: 'hidden', borderRadius: 2 }}>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2, borderBottom: 1, borderColor: 'divider', p: 2 }}
-      >
-        <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
-          <Button variant="outlined" size="small" type="button" onClick={() => onDateChange(startOfDay(new Date()))}>Today</Button>
-          <Stack direction="row" sx={{ alignItems: 'center' }}>
-            <IconButton size="small" type="button" onClick={() => move(-1)} aria-label={`Previous ${view.toLowerCase()}`}>
-              <span aria-hidden>‹</span>
-            </IconButton>
-            <IconButton size="small" type="button" onClick={() => move(1)} aria-label={`Next ${view.toLowerCase()}`}>
-              <span aria-hidden>›</span>
-            </IconButton>
-          </Stack>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>{calendarRangeLabel(date, view)}</Typography>
-        </Stack>
-        <ToggleButtonGroup
-          exclusive
-          value={view}
-          size="small"
-          onChange={(_, value: CalendarView | null) => value && onViewChange(value)}
-          aria-label="Calendar view"
-          sx={segmentedControlSx}
-        >
-          {(['DAILY', 'WEEKLY', 'MONTHLY'] as CalendarView[]).map((option) => (
-            <ToggleButton key={option} value={option}>{statusLabel(option)}</ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      </Stack>
-
-      {view === 'DAILY' && (
-        <DailyCalendar
-          date={date}
-          lessons={sortedLessons}
-          students={students}
-          isUpdating={isUpdating}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onUpdateStatus={onUpdateStatus}
-          onUpdatePaymentStatus={onUpdatePaymentStatus}
-        />
-      )}
-      {view === 'WEEKLY' && (
-        <WeeklyCalendar
-          date={date}
-          lessons={sortedLessons}
-          students={students}
-          isUpdating={isUpdating}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onUpdateStatus={onUpdateStatus}
-          onUpdatePaymentStatus={onUpdatePaymentStatus}
-        />
-      )}
-      {view === 'MONTHLY' && (
-        <MonthlyCalendar
-          date={date}
-          lessons={sortedLessons}
-          isUpdating={isUpdating}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onUpdateStatus={onUpdateStatus}
-          onUpdatePaymentStatus={onUpdatePaymentStatus}
-        />
-      )}
-    </Paper>
-  );
-}
-
-function DailyCalendar({
-  date,
-  lessons,
-  students,
-  isUpdating,
-  onEdit,
-  onDelete,
-  onUpdateStatus,
-  onUpdatePaymentStatus,
-}: {
-  date: Date;
-  lessons: Lesson[];
-  students: Student[];
-  isUpdating: (lesson: Lesson) => boolean;
-  onEdit: (lesson: Lesson) => void;
-  onDelete: (lesson: Lesson) => void;
-  onUpdateStatus: (id: string, status: LessonStatus) => void;
-  onUpdatePaymentStatus: (id: string, status: PaymentStatus) => void;
-}) {
-  const dayLessons = lessons.filter((lesson) => isSameDay(new Date(lesson.lessonDate), date));
-
-  return (
-    <div className="p-3 sm:p-4">
-      <div className="mb-3 border-b border-border pb-3">
-        <h3 className="font-semibold text-foreground">{date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}</h3>
-      </div>
-      <div className="max-h-[640px] space-y-3 overflow-y-auto pr-1">
-        {dayLessons.map((lesson) => (
-          <DailyLessonCard
-            key={lesson.id}
-            lesson={lesson}
-            student={students.find((student) => student.id === lesson.studentId)}
-            isUpdating={isUpdating(lesson)}
-            onEdit={() => onEdit(lesson)}
-            onDelete={() => onDelete(lesson)}
-            onUpdateStatus={(status) => onUpdateStatus(lesson.id, status)}
-            onUpdatePaymentStatus={(paymentStatus) => onUpdatePaymentStatus(lesson.id, paymentStatus)}
-          />
-        ))}
-        {dayLessons.length === 0 && <CalendarEmptyState message="No lessons scheduled for this day." />}
-      </div>
-    </div>
-  );
-}
-
-function DailyLessonCard({
-  lesson,
-  student,
-  isUpdating,
-  onEdit,
-  onDelete,
-  onUpdateStatus,
-  onUpdatePaymentStatus,
-}: {
-  lesson: Lesson;
-  student?: Student;
-  isUpdating: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  onUpdateStatus: (status: LessonStatus) => void;
-  onUpdatePaymentStatus: (status: PaymentStatus) => void;
-}) {
-  const palette = calendarPaymentPalette(lesson);
-  const customLinks = lessonLinksForDisplay(lesson);
-
-  return (
-    <article className="relative overflow-hidden rounded-lg border border-border bg-card p-4 pl-5 sm:p-5 sm:pl-6">
-      <span className={`absolute inset-y-0 left-0 w-1 ${palette.rail}`} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-2">
-              <Icon name="clock" className="h-4 w-4" />
-              <strong className="font-semibold text-foreground">{lessonTimeRange(lesson)}</strong>
-              <span>({lesson.durationMinutes} min)</span>
-            </span>
-            <CalendarStatusSelect
-              ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
-              value={lesson.status}
-              options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']}
-              tone={lessonStatusStyles[lesson.status]}
-              disabled={isUpdating}
-              onChange={(value) => onUpdateStatus(value as LessonStatus)}
-            />
-            <CalendarStatusSelect
-              ariaLabel={`Payment status for ${lesson.title || 'lesson'}`}
-              value={lesson.paymentStatus}
-              options={['UNPAID', 'PAID', 'PARTIAL']}
-              tone={paymentStatusStyles[lesson.paymentStatus]}
-              disabled={isUpdating}
-              onChange={(value) => onUpdatePaymentStatus(value as PaymentStatus)}
-            />
-          </div>
-          <h3 className="text-base font-semibold text-foreground">{lesson.title || 'Tutoring lesson'}</h3>
-          <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-            <Icon name="user" className="h-4 w-4" />
-            {lesson.studentName}
-          </p>
-          {(student?.schoolYear || student?.subject) && (
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              {student.schoolYear && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon name="graduation" className="h-4 w-4" />
-                  <span>Year level: {student.schoolYear}</span>
-                </span>
-              )}
-              {student.subject && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon name="book" className="h-4 w-4" />
-                  <span>{student.subject}</span>
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        <div className="flex gap-1 self-end sm:self-auto">
-          <VideoCallButton lesson={lesson} />
-          <AttachedLinkButtons lesson={lesson} />
-          <IconButton size="small" type="button" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`}>
-            <Icon name="edit" className="h-4 w-4" />
-          </IconButton>
-          <IconButton size="small" color="error" type="button" onClick={onDelete} aria-label={`Delete ${lesson.title || 'lesson'}`}>
-            <Icon name="trash" className="h-4 w-4" />
-          </IconButton>
-        </div>
-      </div>
-      <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-4 text-sm text-muted-foreground">
-        <span className="inline-flex items-center gap-2">
-          <Icon name="dollar" className="h-4 w-4" />
-          <strong className="text-foreground">{lesson.hourlyRate}/hr</strong>
-          <span>({lessonAmount(lesson)} total)</span>
-        </span>
-        {lesson.googleMeetLink && (
-          <a className="inline-flex items-center gap-2 font-medium text-primary hover:underline" href={lesson.googleMeetLink} target="_blank" rel="noreferrer">
-            <Icon name="video" className="h-4 w-4" />
-            Video call
-          </a>
-        )}
-        {customLinks.map((link, index) => (
-          <a key={`${link.label}-${link.url}-${index}`} className="inline-flex items-center gap-2 font-medium text-primary hover:underline" href={link.url} target="_blank" rel="noreferrer">
-            <Icon name="link" className="h-4 w-4" />
-            {link.label || 'Link'}
-          </a>
-        ))}
-        {lesson.lessonNotes && <span className="inline-flex items-center gap-2"><Icon name="edit" className="h-4 w-4" />{lesson.lessonNotes}</span>}
-        {lesson.homework && <span className="inline-flex items-center gap-2"><Icon name="book" className="h-4 w-4" />{lesson.homework}</span>}
-      </div>
-    </article>
-  );
-}
-
-function WeeklyCalendar({
-  date,
-  lessons,
-  students,
-  isUpdating,
-  onEdit,
-  onDelete,
-  onUpdateStatus,
-  onUpdatePaymentStatus,
-}: {
-  date: Date;
-  lessons: Lesson[];
-  students: Student[];
-  isUpdating: (lesson: Lesson) => boolean;
-  onEdit: (lesson: Lesson) => void;
-  onDelete: (lesson: Lesson) => void;
-  onUpdateStatus: (id: string, status: LessonStatus) => void;
-  onUpdatePaymentStatus: (id: string, status: PaymentStatus) => void;
-}) {
-  const weekStart = startOfWeek(date);
-
-  return (
-    <div className="max-h-[640px] overflow-auto">
-      <div className="grid min-h-[360px] sm:grid-cols-2 xl:grid-cols-7">
-        {Array.from({ length: 7 }).map((_, index) => {
-          const day = addDays(weekStart, index);
-          const dayLessons = lessons.filter((lesson) => isSameDay(new Date(lesson.lessonDate), day));
-          return (
-            <div key={day.toISOString()} className="border-b border-border p-3 sm:border-r sm:[&:nth-child(2n)]:border-r-0 xl:border-b-0 xl:[&:nth-child(2n)]:border-r xl:[&:nth-child(7n)]:border-r-0">
-              <p className="text-sm font-medium text-foreground">{day.toLocaleDateString('en-AU', { weekday: 'short' })}</p>
-              <p className={`mb-3 text-xs ${isSameDay(day, new Date()) ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{day.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' })}</p>
-              <div className="space-y-2">
-                {dayLessons.map((lesson) => (
-                  <CalendarLessonCard
-                    key={lesson.id}
-                    lesson={lesson}
-                    student={students.find((student) => student.id === lesson.studentId)}
-                    isUpdating={isUpdating(lesson)}
-                    onEdit={() => onEdit(lesson)}
-                    onDelete={() => onDelete(lesson)}
-                    onUpdateStatus={(status) => onUpdateStatus(lesson.id, status)}
-                    onUpdatePaymentStatus={(paymentStatus) => onUpdatePaymentStatus(lesson.id, paymentStatus)}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MonthlyCalendar({
-  date,
-  lessons,
-  isUpdating,
-  onEdit,
-  onDelete,
-  onUpdateStatus,
-  onUpdatePaymentStatus,
-}: {
-  date: Date;
-  lessons: Lesson[];
-  isUpdating: (lesson: Lesson) => boolean;
-  onEdit: (lesson: Lesson) => void;
-  onDelete: (lesson: Lesson) => void;
-  onUpdateStatus: (id: string, status: LessonStatus) => void;
-  onUpdatePaymentStatus: (id: string, status: PaymentStatus) => void;
-}) {
-  const firstDay = startOfMonthGrid(date);
-  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
-  const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId);
-
-  return (
-    <>
-      <div className="overflow-x-auto">
-        <div className="min-w-[840px]">
-          <div className="grid grid-cols-7 border-b border-border bg-muted/55">
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => <div key={day} className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{day}</div>)}
-          </div>
-          <div className="grid grid-cols-7">
-            {Array.from({ length: 42 }).map((_, index) => {
-              const day = addDays(firstDay, index);
-              const dayLessons = lessons.filter((lesson) => isSameDay(new Date(lesson.lessonDate), day));
-              const isCurrentMonth = day.getMonth() === date.getMonth();
-              return (
-                <div key={day.toISOString()} className="min-h-32 border-b border-r border-border p-2 [&:nth-child(7n)]:border-r-0">
-                  <div className="mb-2 flex h-6 items-center">
-                    <span className={`text-xs ${isSameDay(day, new Date()) ? 'inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground' : isCurrentMonth ? 'text-foreground' : 'text-muted-foreground/60'}`}>
-                      {day.getDate()}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {dayLessons.slice(0, 3).map((lesson) => {
-                      const palette = calendarPaymentPalette(lesson);
-                      return (
-                        <div key={lesson.id} className="group relative">
-                          <ButtonBase
-                            className={`relative w-full overflow-hidden rounded-md border border-border bg-white text-left text-[12px] shadow-sm transition-all hover:-translate-y-px hover:border-neutral-300 hover:shadow ${palette.chip}`}
-                            onClick={() => setSelectedLessonId(lesson.id)}
-                            sx={{
-                              alignItems: 'center',
-                              display: 'flex',
-                              justifyContent: 'flex-start',
-                              minHeight: 40,
-                              px: 1,
-                              py: 0.75,
-                              pl: 1.5,
-                            }}
-                          >
-                            <span className={`absolute inset-y-0 left-0 w-1 ${palette.rail}`} />
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-[11px] font-medium leading-snug opacity-80">{timeLabel(lesson.lessonDate)}</span>
-                              <span className="block truncate font-medium leading-snug text-foreground">{lesson.studentName}</span>
-                            </span>
-                          </ButtonBase>
-                          <LessonHoverCard lesson={lesson} />
-                        </div>
-                      );
-                    })}
-                    {dayLessons.length > 3 && <p className="px-1 text-[11px] text-muted-foreground">+{dayLessons.length - 3} more</p>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      {selectedLesson && (
-        <MonthlyLessonModal
-          lesson={selectedLesson}
-          isUpdating={isUpdating(selectedLesson)}
-          onClose={() => setSelectedLessonId(null)}
-          onEdit={() => { setSelectedLessonId(null); onEdit(selectedLesson); }}
-          onDelete={() => { setSelectedLessonId(null); onDelete(selectedLesson); }}
-          onUpdateStatus={(status) => onUpdateStatus(selectedLesson.id, status)}
-          onUpdatePaymentStatus={(paymentStatus) => onUpdatePaymentStatus(selectedLesson.id, paymentStatus)}
-        />
-      )}
-    </>
-  );
-}
-
-function LessonHoverCard({ lesson }: { lesson: Lesson }) {
-  return (
-    <div className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-60 rounded-lg border border-border bg-card p-3 text-left shadow-lg group-hover:block">
-      <p className="truncate text-sm font-semibold text-foreground">{lesson.title || 'Tutoring lesson'}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{lesson.studentName}</p>
-      <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Icon name="clock" className="h-3.5 w-3.5" />{lessonTimeRange(lesson)}</p>
-      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"><Icon name="dollar" className="h-3.5 w-3.5" />{lesson.hourlyRate}/hr ({lessonAmount(lesson)} total)</p>
-    </div>
-  );
-}
-
-function MonthlyLessonModal({
-  lesson,
-  isUpdating,
-  onClose,
-  onEdit,
-  onDelete,
-  onUpdateStatus,
-  onUpdatePaymentStatus,
-}: {
-  lesson: Lesson;
-  isUpdating: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onUpdateStatus: (status: LessonStatus) => void;
-  onUpdatePaymentStatus: (status: PaymentStatus) => void;
-}) {
-  const customLinks = lessonLinksForDisplay(lesson);
-
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      fullWidth
-      maxWidth="sm"
-      aria-label={`${lesson.title || 'Lesson'} details`}
-      sx={{ '& .MuiDialog-paper': { bgcolor: '#f7f7f7', borderRadius: 2, overflow: 'hidden' } }}
-    >
-      <DialogContent sx={{ p: 0 }}>
-        <Stack direction="row" sx={{ alignItems: 'flex-start', bgcolor: 'background.paper', justifyContent: 'space-between', gap: 2, px: { xs: 2.5, sm: 3 }, pt: 2.5, pb: 1.5 }}>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.25 }}>{lesson.title || 'Tutoring lesson'}</Typography>
-          </Box>
-          <IconButton type="button" onClick={onClose} aria-label="Close lesson details" sx={{ mt: -0.5 }}>
-            <Icon name="x" className="h-4 w-4" />
-          </IconButton>
-        </Stack>
-
-        <Box sx={{ bgcolor: '#f7f7f7', px: { xs: 2.5, sm: 3 }, py: 2.5 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, columnGap: 5, rowGap: 2 }}>
-            <LessonSummaryLine icon="calendar" value={new Date(lesson.lessonDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })} />
-            <LessonSummaryLine icon="clock" value={lessonTimeRange(lesson)} />
-            <LessonSummaryLine icon="dollar" value={`${lesson.hourlyRate}/hr (${lessonAmount(lesson)} total)`} />
-            {lesson.googleMeetLink && <LessonVideoCallLine lesson={lesson} />}
-            {customLinks.map((link, index) => <LessonAttachedLinkLine key={`${link.label}-${link.url}-${index}`} link={link} />)}
-            <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-              <CalendarStatusSelect
-                ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
-                value={lesson.status}
-                options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']}
-                tone={lessonStatusStyles[lesson.status]}
-                disabled={isUpdating}
-                onChange={(value) => onUpdateStatus(value as LessonStatus)}
-              />
-              <CalendarStatusSelect
-                ariaLabel={`Payment status for ${lesson.title || 'lesson'}`}
-                value={lesson.paymentStatus}
-                options={['UNPAID', 'PAID', 'PARTIAL']}
-                tone={paymentStatusStyles[lesson.paymentStatus]}
-                disabled={isUpdating}
-                onChange={(value) => onUpdatePaymentStatus(value as PaymentStatus)}
-              />
-            </Stack>
-          </Box>
-
-          {lesson.lessonNotes && (
-            <Paper variant="outlined" sx={{ mt: 2, p: 1.5, borderColor: '#e2e2e2', bgcolor: 'background.paper' }}>
-              <Typography variant="caption" color="text.secondary">Notes</Typography>
-              <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{lesson.lessonNotes}</Typography>
-            </Paper>
-          )}
-        </Box>
-
-        <Stack direction={{ xs: 'column-reverse', sm: 'row' }} sx={{ bgcolor: '#f7f7f7', borderTop: 1, borderColor: '#e4e4e4', justifyContent: 'flex-end', gap: 1, px: { xs: 2.5, sm: 3 }, py: 2 }}>
-          <Button
-            variant="outlined"
-            type="button"
-            size="small"
-            startIcon={<Icon name="trash" className="h-3.5 w-3.5" />}
-            onClick={onDelete}
-            sx={{ borderColor: '#fecaca', color: '#dc2626', minHeight: 36, textTransform: 'none', '&:hover': { borderColor: '#fca5a5', bgcolor: '#fff1f2' } }}
-          >
-            Delete lesson
-          </Button>
-          <Button
-            variant="outlined"
-            type="button"
-            size="small"
-            onClick={onClose}
-            sx={{ borderColor: '#d4d4d4', color: '#525252', minHeight: 36, textTransform: 'none', '&:hover': { borderColor: '#a3a3a3', bgcolor: '#eeeeee' } }}
-          >
-            Close
-          </Button>
-          {lesson.googleMeetLink && (
-            <Button
-              component="a"
-              href={lesson.googleMeetLink}
-              target="_blank"
-              rel="noreferrer"
-              variant="outlined"
-              type="button"
-              size="small"
-              startIcon={<Icon name="video" className="h-3.5 w-3.5" />}
-              sx={{ borderColor: '#bbf7d0', color: '#166534', minHeight: 36, textTransform: 'none', '&:hover': { borderColor: '#86efac', bgcolor: '#f0fdf4' } }}
-            >
-              Join call
-            </Button>
-          )}
-          {customLinks.map((link, index) => (
-            <Button
-              key={`${link.label}-${link.url}-${index}`}
-              component="a"
-              href={link.url}
-              target="_blank"
-              rel="noreferrer"
-              variant="outlined"
-              type="button"
-              size="small"
-              startIcon={<Icon name="link" className="h-3.5 w-3.5" />}
-              sx={{ borderColor: '#d4d4d4', color: '#525252', minHeight: 36, textTransform: 'none', '&:hover': { borderColor: '#a3a3a3', bgcolor: '#eeeeee' } }}
-            >
-              {link.label || 'Link'}
-            </Button>
-          ))}
-          <Button
-            variant="contained"
-            type="button"
-            size="small"
-            startIcon={<Icon name="edit" className="h-3.5 w-3.5" />}
-            onClick={onEdit}
-            sx={{ bgcolor: '#52525b', minHeight: 36, textTransform: 'none', '&:hover': { bgcolor: '#3f3f46' } }}
-          >
-            Edit lesson
-          </Button>
-        </Stack>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function VideoCallButton({ lesson, compact = false }: { lesson: Lesson; compact?: boolean }) {
-  if (!lesson.googleMeetLink) return null;
-
-  return (
-    <IconButton
-      component="a"
-      href={lesson.googleMeetLink}
-      target="_blank"
-      rel="noreferrer"
-      size="small"
-      type="button"
-      aria-label={`Open video call for ${lesson.title || 'lesson'}`}
-      title="Open video call"
-      onClick={(event) => event.stopPropagation()}
-      sx={compact ? { p: 0.25, color: 'success.main' } : { color: 'success.main' }}
-    >
-      <Icon name="video" className={compact ? 'h-3 w-3' : 'h-4 w-4'} />
-    </IconButton>
-  );
-}
-
-function AttachedLinkButtons({ lesson, compact = false }: { lesson: Lesson; compact?: boolean }) {
-  const customLinks = lessonLinksForDisplay(lesson);
-  if (customLinks.length === 0) return null;
-
-  return (
-    <>
-      {customLinks.map((link, index) => (
-        <IconButton
-          key={`${link.label}-${link.url}-${index}`}
-          component="a"
-          href={link.url}
-          target="_blank"
-          rel="noreferrer"
-          size="small"
-          type="button"
-          aria-label={`Open ${link.label || 'attached link'} for ${lesson.title || 'lesson'}`}
-          title={link.label || 'Open attached link'}
-          onClick={(event) => event.stopPropagation()}
-          sx={compact ? { p: 0.25, color: 'text.secondary' } : { color: 'text.secondary' }}
-        >
-          <Icon name="link" className={compact ? 'h-3 w-3' : 'h-4 w-4'} />
-        </IconButton>
-      ))}
-    </>
-  );
-}
-
-function LessonVideoCallLine({ lesson }: { lesson: Lesson }) {
-  if (!lesson.googleMeetLink) return null;
-
-  return (
-    <Stack component="a" href={lesson.googleMeetLink} target="_blank" rel="noreferrer" direction="row" sx={{ alignItems: 'center', color: 'success.dark', gap: 1.25, minWidth: 0, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
-      <Box sx={{ color: 'success.dark', display: 'flex' }}>
-        <Icon name="video" className="h-4 w-4" />
-      </Box>
-      <Typography variant="body2" sx={{ color: 'success.dark', fontWeight: 500, minWidth: 0 }}>Join video call</Typography>
-    </Stack>
-  );
-}
-
-function LessonAttachedLinkLine({ link }: { link: { label: string; url: string } }) {
-  return (
-    <Stack component="a" href={link.url} target="_blank" rel="noreferrer" direction="row" sx={{ alignItems: 'center', color: 'text.secondary', gap: 1.25, minWidth: 0, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
-      <Box sx={{ color: 'text.secondary', display: 'flex' }}>
-        <Icon name="link" className="h-4 w-4" />
-      </Box>
-      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, minWidth: 0 }}>{link.label || 'Link'}</Typography>
-    </Stack>
-  );
-}
-
-function lessonLinksForDisplay(lesson: Lesson) {
-  if (lesson.lessonLinks?.length) {
-    return lesson.lessonLinks.filter((link) => link.url?.trim());
-  }
-  if (lesson.miroBoardUrl) {
-    return [{ label: 'Board', url: lesson.miroBoardUrl }];
-  }
-  return [];
-}
-
-function LessonSummaryLine({ icon, value }: { icon: 'calendar' | 'clock' | 'dollar'; value: string }) {
-  return (
-    <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-      <Box sx={{ color: 'text.secondary', display: 'flex' }}>
-        <Icon name={icon} className="h-4 w-4" />
-      </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>{value}</Typography>
-    </Stack>
-  );
-}
-
-function CalendarEmptyState({ message }: { message: string }) {
-  return (
-    <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', borderStyle: 'dashed', borderRadius: 2 }}>
-      <Icon name="calendar" className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-      <Typography variant="body2" color="text.secondary">{message}</Typography>
-    </Paper>
-  );
-}
-
-function CalendarLessonCard({
-  lesson,
-  student,
-  isUpdating,
-  onEdit,
-  onDelete,
-  onUpdateStatus,
-  onUpdatePaymentStatus,
-}: {
-  lesson: Lesson;
-  student?: Student;
-  isUpdating: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  onUpdateStatus: (status: LessonStatus) => void;
-  onUpdatePaymentStatus: (status: PaymentStatus) => void;
-}) {
-  const palette = calendarPaymentPalette(lesson);
-  const customLinks = lessonLinksForDisplay(lesson);
-
-  return (
-    <article className="group relative overflow-hidden rounded-lg border border-border/80 bg-muted/45 p-2.5 pl-3.5 text-xs shadow-sm transition-all hover:border-border hover:bg-muted/70 hover:shadow">
-      <span className={`absolute inset-y-0 left-0 w-1 ${palette.rail}`} />
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex min-w-0 items-start justify-between gap-1">
-          <div className="min-w-0 flex-1 pr-1">
-            <span className={`inline-flex max-w-full shrink items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${palette.pill}`}>
-              <Icon name="clock" className="h-3 w-3 shrink-0" />
-              <span className="min-w-0 truncate">{lessonTimeRange(lesson)}</span>
-            </span>
-          </div>
-          <div className="flex shrink-0 opacity-60 transition-opacity group-hover:opacity-100">
-            <VideoCallButton lesson={lesson} compact />
-            <AttachedLinkButtons lesson={lesson} compact />
-            <IconButton size="small" onClick={onEdit} aria-label={`Edit ${lesson.title || 'lesson'}`} sx={{ p: 0.25 }}>
-              <Icon name="edit" className="h-3 w-3" />
-            </IconButton>
-            <IconButton size="small" color="error" onClick={onDelete} aria-label={`Delete ${lesson.title || 'lesson'}`} sx={{ p: 0.25 }}>
-              <Icon name="trash" className="h-3 w-3" />
-            </IconButton>
-          </div>
-        </div>
-
-        <div className="min-w-0">
-          {student && isGeneratedLessonTitle(student, lesson.title) ? (
-            <div className="space-y-1">
-              <p className="whitespace-normal break-words font-semibold leading-tight text-foreground">{student.name}</p>
-              {student.schoolYear && (
-                <p className="flex items-start gap-1 text-[10px] leading-tight text-muted-foreground">
-                  <Icon name="graduation" className="h-3 w-3 shrink-0" />
-                  <span>{student.schoolYear}</span>
-                </p>
-              )}
-              {student.subject && (
-                <p className="flex items-start gap-1 whitespace-normal break-words text-[10px] leading-tight text-muted-foreground">
-                  <Icon name="book" className="h-3 w-3 shrink-0" />
-                  <span>{student.subject}</span>
-                </p>
-              )}
-              <WeeklyLessonRate lesson={lesson} />
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <p className="whitespace-normal break-words font-semibold leading-tight text-foreground">{lesson.title || 'Tutoring lesson'}</p>
-              <WeeklyLessonRate lesson={lesson} />
-            </div>
-          )}
-          {lesson.googleMeetLink && (
-            <a className="mt-1 flex items-start gap-1 text-[10px] font-medium leading-tight text-primary hover:underline" href={lesson.googleMeetLink} target="_blank" rel="noreferrer">
-              <Icon name="video" className="h-3 w-3 shrink-0" />
-              <span>Meeting</span>
-            </a>
-          )}
-          {customLinks.slice(0, 2).map((link, index) => (
-            <a key={`${link.label}-${link.url}-${index}`} className="mt-1 flex items-start gap-1 text-[10px] font-medium leading-tight text-primary hover:underline" href={link.url} target="_blank" rel="noreferrer">
-              <Icon name="link" className="h-3 w-3 shrink-0" />
-              <span className="truncate">{link.label || 'Link'}</span>
-            </a>
-          ))}
-          {customLinks.length > 2 && <p className="mt-1 text-[10px] leading-tight text-muted-foreground">+{customLinks.length - 2} more links</p>}
-        </div>
-      </div>
-      {lesson.lessonSeriesId && <span className="mt-1 inline-flex rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Recurring</span>}
-      <div className="mt-2 space-y-1.5 border-t border-border pt-2">
-        <QuickStatusSelect
-          label="Lesson"
-          ariaLabel={`Lesson status for ${lesson.title || 'lesson'}`}
-          value={lesson.status}
-          options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']}
-          tone={lessonStatusStyles[lesson.status]}
-          disabled={isUpdating}
-          onChange={(value) => onUpdateStatus(value as LessonStatus)}
-        />
-        <QuickStatusSelect
-          label="Payment"
-          ariaLabel={`Payment status for ${lesson.title || 'lesson'}`}
-          value={lesson.paymentStatus}
-          options={['UNPAID', 'PAID', 'PARTIAL']}
-          tone={paymentStatusStyles[lesson.paymentStatus]}
-          disabled={isUpdating}
-          onChange={(value) => onUpdatePaymentStatus(value as PaymentStatus)}
-        />
-      </div>
-    </article>
-  );
-}
-
-function WeeklyLessonRate({ lesson }: { lesson: Lesson }) {
-  return (
-    <p className="flex items-start gap-1 text-[10px] leading-tight text-muted-foreground">
-      <Icon name="dollar" className="h-3 w-3 shrink-0" />
-      <span>{lesson.hourlyRate}/hr</span>
-    </p>
-  );
-}
-
-function CalendarStatusSelect({ ariaLabel, value, options, tone, disabled, onChange }: { ariaLabel: string; value: string; options: string[]; tone: string; disabled: boolean; onChange: (value: string) => void }) {
-  return (
-    <FormControl size="small" disabled={disabled}>
-      <Select
-        aria-label={ariaLabel}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        displayEmpty
-        sx={statusSelectSx(tone, 12, 120)}
-        className={tone}
-      >
-        {options.map((option) => <MenuItem key={option} value={option}>{statusLabel(option)}</MenuItem>)}
-      </Select>
-    </FormControl>
-  );
-}
-
-function QuickStatusSelect({ label, ariaLabel, value, options, tone, disabled, onChange }: { label: string; ariaLabel: string; value: string; options: string[]; tone: string; disabled: boolean; onChange: (value: string) => void }) {
-  return (
-    <Stack direction="row" sx={{ alignItems: 'center', gap: 1, justifyContent: 'space-between', minWidth: 0 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, fontSize: 9, fontWeight: 600, letterSpacing: 0, textTransform: 'uppercase' }}>{label}</Typography>
-      <Select
-        aria-label={ariaLabel}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        displayEmpty
-        sx={statusSelectSx(tone, 10, 96)}
-        className={tone}
-      >
-        {options.map((option) => <MenuItem key={option} value={option}>{statusLabel(option)}</MenuItem>)}
-      </Select>
-    </Stack>
-  );
+function storedLessonCalendarView(): CalendarView {
+  const stored = localStorage.getItem(lessonCalendarViewStorageKey) as CalendarView | null;
+  return stored && calendarViews.includes(stored) ? stored : 'WEEKLY';
 }
 
 const segmentedControlSx = {
@@ -1317,45 +554,3 @@ const segmentedControlSx = {
     },
   },
 };
-
-function statusSelectSx(tone: string, fontSize: number, minWidth: number) {
-  const palette = statusTonePalette(tone);
-  return {
-    minWidth: minWidth || undefined,
-    maxWidth: '100%',
-    borderRadius: 1.5,
-    bgcolor: palette.bg,
-    color: palette.color,
-    fontSize,
-    fontWeight: 500,
-    lineHeight: 1.2,
-    '& .MuiSelect-select': {
-      minHeight: 'auto',
-      py: 0.55,
-      pl: 1,
-      pr: 3,
-    },
-    '& .MuiOutlinedInput-notchedOutline': {
-      borderColor: palette.border,
-    },
-    '&:hover .MuiOutlinedInput-notchedOutline': {
-      borderColor: palette.border,
-    },
-    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderColor: palette.border,
-      borderWidth: 1,
-    },
-    '& .MuiSvgIcon-root': {
-      color: palette.color,
-      fontSize: 18,
-    },
-  };
-}
-
-function statusTonePalette(tone: string) {
-  if (tone.includes('blue')) return { bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af' };
-  if (tone.includes('green')) return { bg: '#f0fdf4', border: '#bbf7d0', color: '#166534' };
-  if (tone.includes('red')) return { bg: '#fef2f2', border: '#fecaca', color: '#991b1b' };
-  if (tone.includes('yellow')) return { bg: '#fefce8', border: '#fde68a', color: '#854d0e' };
-  return { bg: '#f9fafb', border: '#e5e7eb', color: '#374151' };
-}

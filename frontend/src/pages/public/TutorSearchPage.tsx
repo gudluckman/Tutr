@@ -158,7 +158,7 @@ function TutorResultCard({ tutor }: { tutor: TutorProfile }) {
         <Avatar
           src={imageUrl}
           alt={tutor.displayName}
-          sx={{ width: 56, height: 56, bgcolor: '#dcfce7', color: 'primary.main', fontWeight: 600 }}
+          sx={{ width: 56, height: 56, bgcolor: '#eef2ff', color: 'primary.main', fontWeight: 600 }}
         >
           {initials(tutor.displayName)}
         </Avatar>

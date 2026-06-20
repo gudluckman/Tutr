@@ -35,6 +35,7 @@ export type EarningsResponse = {
   averageHourlyRate: number;
   weeks: WeeklyEarning[];
   availableYears: number[];
+  availableFinancialYearStarts: number[];
   availableMonths: string[];
   page: number;
   pageSize: number;

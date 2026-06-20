@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Box, Button, Chip, FormControl, IconButton, InputAdornment, InputLabel, Link, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material';
 import { Icon } from '../../../components/ui/Icon';
 import type { Lesson, LessonStatus, PaymentStatus } from '../../../types/lesson';
+import { paymentStatusOptions } from './constants';
 import { searchMatcher, statusLabel, timeLabel, toDateInputValue, toTimeInputValue } from './lessonUtils';
 
 export function LessonTable({ lessons, onEdit, onDelete }: { lessons: Lesson[]; onEdit: (lesson: Lesson) => void; onDelete: (lesson: Lesson) => void }) {
@@ -89,7 +90,7 @@ export function LessonTable({ lessons, onEdit, onDelete }: { lessons: Lesson[]; 
         <HistorySelect label="Student" value={studentId} onChange={setStudentId} options={studentOptions.map(([value, label]) => ({ value, label }))} placeholder="All students" />
         <HistoryInput label="Lesson date" type="date" value={lessonDate} onChange={setLessonDate} />
         <HistoryInput label="Start time" type="time" value={lessonTime} onChange={setLessonTime} />
-        <HistorySelect label="Payment" value={paymentStatus} onChange={setPaymentStatus} options={['UNPAID', 'PAID', 'PARTIAL'].map((value) => ({ value, label: statusLabel(value) }))} placeholder="All payments" />
+        <HistorySelect label="Payment" value={paymentStatus} onChange={setPaymentStatus} options={paymentStatusOptions.map((value) => ({ value, label: statusLabel(value) }))} placeholder="All payments" />
         <HistorySelect label="Lesson status" value={lessonStatus} onChange={setLessonStatus} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].map((value) => ({ value, label: statusLabel(value) }))} placeholder="All statuses" />
           <Box sx={{ display: 'flex', alignItems: 'end', gridColumn: { xl: 'span 4' } }}>
           <Button variant="outlined" color="inherit" onClick={() => {
@@ -234,7 +235,7 @@ function StatusBadge({ status }: { status: LessonStatus }) {
 function PaymentBadge({ status }: { status: PaymentStatus }) {
   const colors: Record<PaymentStatus, BadgeTone> = {
     PAID: 'green',
-    UNPAID: 'red',
+    UNPAID: 'yellow',
     PARTIAL: 'yellow',
   };
   return <Chip size="small" label={statusLabel(status)} sx={badgeSx(colors[status])} />;
@@ -252,7 +253,7 @@ function badgeSx(tone: BadgeTone) {
     green: { bg: '#dcfce7', color: '#008a2e' },
     red: { bg: '#fee2e2', color: '#b91c1c' },
     yellow: { bg: '#fef3c7', color: '#a16207' },
-    gray: { bg: '#f3f4f6', color: '#4b5563' },
+    gray: { bg: '#e5e7eb', color: '#111827' },
   };
   return {
     height: 24,

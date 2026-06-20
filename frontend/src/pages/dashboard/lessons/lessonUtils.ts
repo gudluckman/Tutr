@@ -22,8 +22,13 @@ export function subjectOptionsForStudent(student?: Student) {
 
 export function isGeneratedLessonTitle(student: Student, title?: string) {
   if (!title) return false;
-  if (title === lessonTitle(student)) return true;
-  return subjectOptionsForStudent(student).some((subject) => title === lessonTitleWithSubject(student, subject));
+  const normalizedTitle = normalizeGeneratedTitle(title);
+  if (normalizedTitle === normalizeGeneratedTitle(lessonTitle(student))) return true;
+  return subjectOptionsForStudent(student).some((subject) => normalizedTitle === normalizeGeneratedTitle(lessonTitleWithSubject(student, subject)));
+}
+
+function normalizeGeneratedTitle(title: string) {
+  return title.toLowerCase().replace(/[–—-]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 export function statusLabel(status: string) {
@@ -47,9 +52,9 @@ export function calendarPaymentPalette(lesson: Lesson) {
   }
   if (lesson.paymentStatus === 'UNPAID' && lessonEndTime(lesson).getTime() < Date.now()) {
     return {
-      rail: 'bg-red-500',
-      pill: 'bg-red-100 text-red-800',
-      chip: 'bg-red-100 text-red-800',
+      rail: 'bg-yellow-400',
+      pill: 'bg-yellow-100 text-yellow-900',
+      chip: 'bg-yellow-100 text-yellow-900',
     };
   }
   return {

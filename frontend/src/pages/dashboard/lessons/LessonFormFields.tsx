@@ -4,7 +4,7 @@ import { Box, Button, Checkbox, FormControl, FormControlLabel, IconButton, Input
 import { Icon } from '../../../components/ui/Icon';
 import type { LessonLink, LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../../types/lesson';
 import type { Student } from '../../../types/student';
-import { googleCalendarColors, googleReminderOptions } from './constants';
+import { googleCalendarColors, googleReminderOptions, paymentStatusOptions } from './constants';
 import { lessonTitle, lessonTitleWithSubject, statusLabel, subjectOptionsForStudent } from './lessonUtils';
 
 export function SingleLessonFields({ form, setForm, students, googleConnected }: { form: LessonPayload; setForm: (form: LessonPayload) => void; students: Student[]; googleConnected: boolean }) {
@@ -45,7 +45,7 @@ export function SingleLessonFields({ form, setForm, students, googleConnected }:
       </FormRow>
       <FormRow columns={3}>
         <SelectField label="Lesson status *" value={form.status} onChange={(value) => setForm({ ...form, status: value as LessonStatus })} options={['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']} />
-        <SelectField label="Payment status *" value={form.paymentStatus} onChange={(value) => setForm({ ...form, paymentStatus: value as PaymentStatus })} options={['UNPAID', 'PAID', 'PARTIAL']} />
+        <SelectField label="Payment status *" value={form.paymentStatus} onChange={(value) => setForm({ ...form, paymentStatus: value as PaymentStatus })} options={paymentStatusOptions} />
         <FormInput label="Invite email" type="email" value={form.inviteEmail ?? ''} onChange={(inviteEmail) => setForm({ ...form, inviteEmail })} />
       </FormRow>
       <GoogleCalendarOptions

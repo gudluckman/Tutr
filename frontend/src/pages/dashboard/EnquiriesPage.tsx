@@ -57,8 +57,8 @@ export function EnquiriesPage() {
   });
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 4 } }}>
-      <Typography variant="h4" sx={{ mb: { xs: 3, sm: 4 }, fontWeight: 600 }}>Enquiries</Typography>
+    <Box sx={{ px: { xs: 2, sm: 4 }, pt: { xs: 3, sm: 4 }, pb: { xs: 2, sm: 4 } }}>
+      <Typography variant="h4" sx={{ mb: { xs: 2.5, sm: 4 }, fontWeight: 600 }}>Enquiries</Typography>
       <ErrorAlert className="mb-6" error={enquiries.error} fallback="Could not load enquiries. Please refresh the page." />
       <ErrorAlert className="mb-6" error={update.error} fallback="Could not update the enquiry status. Please try again." />
       <ErrorAlert className="mb-6" error={convert.error} fallback="Could not convert this enquiry. Please check the student details and try again." />
@@ -74,20 +74,42 @@ export function EnquiriesPage() {
         <Stack sx={{ gap: 2 }}>
           {enquiries.data?.map((enquiry) => (
             <Paper key={enquiry.id} component="article" variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: 2 }}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, justifyContent: 'space-between', gap: 2, mb: 2.5 }}>
-                <Box>
-                  <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>{enquiry.parentName}</Typography>
-                    <StatusBadge status={enquiry.status} />
-                  </Stack>
-                  <Typography variant="body2" color="text.secondary">Received {new Date(enquiry.createdAt).toLocaleDateString('en-AU')}</Typography>
-                </Box>
+              <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, justifyContent: 'space-between', gap: { xs: 2.75, sm: 2 }, mb: 2.5 }}>
+                <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, minWidth: 0 }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>{enquiry.parentName}</Typography>
+                      <StatusBadge status={enquiry.status} />
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary">Received {new Date(enquiry.createdAt).toLocaleDateString('en-AU')}</Typography>
+                  </Box>
+                  <Tooltip title="Delete enquiry">
+                    <span>
+                      <IconButton
+                        type="button"
+                        color="error"
+                        disabled={remove.isPending}
+                        aria-label={`Delete enquiry from ${enquiry.parentName}`}
+                        onClick={() => setDeleting(enquiry)}
+                        sx={{
+                          border: 1,
+                          borderColor: 'divider',
+                          flexShrink: 0,
+                          height: 40,
+                          width: 40,
+                        }}
+                      >
+                        <Icon name="trash" className="h-4 w-4" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </Stack>
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
                   sx={{
                     alignItems: { xs: 'stretch', sm: 'center' },
                     flexWrap: 'wrap',
-                    gap: 1,
+                    gap: { xs: 2, sm: 1 },
                     minWidth: { sm: 368 },
                     width: { xs: '100%', sm: 'auto' },
                   }}
@@ -104,7 +126,7 @@ export function EnquiriesPage() {
                       Convert
                     </Button>
                   )}
-                  <FormControl size="small" sx={{ flex: '1 1 168px', minWidth: 168 }}>
+                  <FormControl size="small" sx={{ flex: { xs: '0 0 auto', sm: '1 1 168px' }, minWidth: { xs: 0, sm: 168 } }}>
                     <InputLabel id={`enquiry-status-${enquiry.id}`}>Status</InputLabel>
                     <Select
                       labelId={`enquiry-status-${enquiry.id}`}
@@ -116,27 +138,6 @@ export function EnquiriesPage() {
                       {statuses.map((status) => <MenuItem key={status} value={status}>{statusLabel(status)}</MenuItem>)}
                     </Select>
                   </FormControl>
-                  <Tooltip title="Delete enquiry">
-                    <span>
-                      <IconButton
-                        type="button"
-                        color="error"
-                        disabled={remove.isPending}
-                        aria-label={`Delete enquiry from ${enquiry.parentName}`}
-                        onClick={() => setDeleting(enquiry)}
-                        sx={{
-                          alignSelf: { xs: 'flex-end', sm: 'center' },
-                          border: 1,
-                          borderColor: 'divider',
-                          flexShrink: 0,
-                          height: 40,
-                          width: 40,
-                        }}
-                      >
-                        <Icon name="trash" className="h-4 w-4" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
                 </Stack>
               </Stack>
 

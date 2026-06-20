@@ -63,12 +63,14 @@ export const emptyRecurring: RecurringLessonPayload = {
 export const lessonStatusStyles: Record<LessonStatus, string> = {
   SCHEDULED: 'border-blue-200 bg-blue-50 text-blue-800',
   COMPLETED: 'border-green-200 bg-green-50 text-green-800',
-  CANCELLED: 'border-gray-200 bg-gray-50 text-gray-700',
+  CANCELLED: 'border-slate-300 bg-slate-100 text-slate-900',
   NO_SHOW: 'border-red-200 bg-red-50 text-red-800',
 };
 
+export const paymentStatusOptions: PaymentStatus[] = ['UNPAID', 'PAID'];
+
 export const paymentStatusStyles: Record<PaymentStatus, string> = {
   PAID: 'border-green-200 bg-green-50 text-green-800',
-  UNPAID: 'border-red-200 bg-red-50 text-red-800',
+  UNPAID: 'border-yellow-300 bg-yellow-100 text-yellow-900',
   PARTIAL: 'border-yellow-200 bg-yellow-50 text-yellow-800',
 };

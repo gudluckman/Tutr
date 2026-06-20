@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 const muiTheme = createTheme({
   palette: {
     primary: {
-      main: '#16a34a',
+      main: '#303f9f',
     },
     success: {
       main: '#16a34a',
