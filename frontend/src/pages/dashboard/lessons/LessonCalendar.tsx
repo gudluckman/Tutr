@@ -241,11 +241,21 @@ function DailyLessonCard({
                 {lesson.hourlyRate}/hr
               </span>
               <span className="font-semibold text-foreground">${lessonAmount(lesson)}</span>
-              <DailyActionLink lesson={lesson} kind="video" />
-              {customLinks.map((link, index) => (
-                <DailyActionLink key={`${link.label}-${link.url}-${index}`} lesson={lesson} link={link} kind="link" />
-              ))}
+              <span className="hidden flex-wrap items-center gap-2 sm:inline-flex">
+                <DailyActionLink lesson={lesson} kind="video" />
+                {customLinks.map((link, index) => (
+                  <DailyActionLink key={`${link.label}-${link.url}-${index}`} lesson={lesson} link={link} kind="link" />
+                ))}
+              </span>
             </div>
+            {(lesson.googleMeetLink || customLinks.length > 0) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 sm:hidden">
+                <DailyActionLink lesson={lesson} kind="video" />
+                {customLinks.map((link, index) => (
+                  <DailyActionLink key={`${link.label}-${link.url}-${index}`} lesson={lesson} link={link} kind="link" />
+                ))}
+              </div>
+            )}
             {(notePreview || homeworkPreview) && (
               <div className="mt-3 space-y-2">
                 {notePreview && (
