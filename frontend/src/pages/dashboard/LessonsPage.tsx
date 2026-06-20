@@ -130,10 +130,34 @@ export function LessonsPage() {
 
   const updateStatuses = useMutation({
     mutationFn: ({ id, status, paymentStatus }: { id: string; status?: LessonStatus; paymentStatus?: PaymentStatus }) => updateLessonStatuses(id, { status, paymentStatus }),
-    onSuccess: (updatedLesson) => {
-      queryClient.setQueryData<Lesson[]>(['lessons'], (currentLessons = []) => currentLessons.map((lesson) => lesson.id === updatedLesson.id ? updatedLesson : lesson));
+    onMutate: async ({ id, status, paymentStatus }) => {
+      await queryClient.cancelQueries({ queryKey: ['lessons'] });
+      const previousLessons = queryClient.getQueryData<Lesson[]>(['lessons']);
+      queryClient.setQueryData<Lesson[]>(['lessons'], (currentLessons = []) => currentLessons.map((lesson) => (
+        lesson.id === id
+          ? {
+              ...lesson,
+              status: status ?? lesson.status,
+              paymentStatus: paymentStatus ?? lesson.paymentStatus,
+            }
+          : lesson
+      )));
+      return { previousLessons };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousLessons) {
+        queryClient.setQueryData(['lessons'], context.previousLessons);
+      }
+    },
+    onSuccess: (updatedLesson, variables) => {
+      queryClient.setQueryData<Lesson[]>(['lessons'], (currentLessons = []) => currentLessons.map((lesson) => (
+        lesson.id === variables.id || lesson.id === updatedLesson.id ? updatedLesson : lesson
+      )));
       queryClient.invalidateQueries({ queryKey: ['earnings'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
     },
   });
 
