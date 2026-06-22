@@ -15,7 +15,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface StudentRepository extends JpaRepository<Student, UUID> {
-    List<Student> findByTutorOrderByCreatedAtDesc(User tutor);
+    List<Student> findByTutorAndActiveTrueOrderByCreatedAtDesc(User tutor);
     Optional<Student> findByIdAndTutor(UUID id, User tutor);
 }
-

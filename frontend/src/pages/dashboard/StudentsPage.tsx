@@ -147,7 +147,7 @@ export function StudentsPage() {
       <ConfirmDeleteDialog
         open={Boolean(deletingStudent)}
         title="Delete student?"
-        message={deletingStudent ? `Are you sure you want to delete ${deletingStudent.name}? This cannot be undone.` : ''}
+        message={deletingStudent ? `Are you sure you want to delete ${deletingStudent.name}? They will be removed from your student list, but existing lesson history will stay available.` : ''}
         isDeleting={remove.isPending}
         onClose={() => setDeletingStudent(null)}
         onConfirm={() => deletingStudent && remove.mutate(deletingStudent.id)}

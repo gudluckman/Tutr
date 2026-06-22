@@ -24,7 +24,7 @@ public class StudentService {
     private final StudentRepository students;
 
     public List<StudentResponse> list(User tutor) {
-        return students.findByTutorOrderByCreatedAtDesc(tutor).stream().map(StudentResponse::from).toList();
+        return students.findByTutorAndActiveTrueOrderByCreatedAtDesc(tutor).stream().map(StudentResponse::from).toList();
     }
 
     public StudentResponse get(User tutor, UUID id) {
@@ -48,7 +48,8 @@ public class StudentService {
 
     @Transactional
     public void delete(User tutor, UUID id) {
-        students.delete(studentFor(tutor, id));
+        Student student = studentFor(tutor, id);
+        student.setActive(false);
     }
 
     public Student studentFor(User tutor, UUID id) {
@@ -67,4 +68,3 @@ public class StudentService {
         student.setActive(request.active());
     }
 }
-
