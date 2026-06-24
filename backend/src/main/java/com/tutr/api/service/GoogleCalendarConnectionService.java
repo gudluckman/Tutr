@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.net.URLEncoder;
@@ -101,7 +102,6 @@ public class GoogleCalendarConnectionService {
     }
 
     @SuppressWarnings("unchecked")
-    @Transactional
     public String accessToken(GoogleCalendarConnection connection) {
         if (connection.getAccessTokenExpiresAt() == null
                 || connection.getAccessTokenExpiresAt().isAfter(Instant.now().plusSeconds(60))
@@ -115,12 +115,21 @@ public class GoogleCalendarConnectionService {
         form.add("refresh_token", connection.getRefreshToken());
         form.add("grant_type", "refresh_token");
 
-        Map<String, Object> token = restClient.post()
-                .uri("https://oauth2.googleapis.com/token")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(form)
-                .retrieve()
-                .body(Map.class);
+        Map<String, Object> token;
+        try {
+            token = restClient.post()
+                    .uri("https://oauth2.googleapis.com/token")
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(form)
+                    .retrieve()
+                    .body(Map.class);
+        } catch (HttpClientErrorException.BadRequest ex) {
+            connection.setSyncEnabled(false);
+            connections.save(connection);
+            throw new IllegalStateException(
+                    "Google Calendar access expired. Reconnect Google Calendar in Profile settings.",
+                    ex);
+        }
 
         String accessToken = String.valueOf(token.get("access_token"));
         Number expiresIn = token.get("expires_in") instanceof Number number ? number : null;
