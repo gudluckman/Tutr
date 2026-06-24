@@ -54,6 +54,7 @@ export function DashboardLayout() {
         break;
       case '/dashboard/profile':
         queryClient.prefetchQuery({ queryKey: ['profile'], queryFn: getTutorProfile });
+        queryClient.prefetchQuery({ queryKey: ['google-calendar-status'], queryFn: getGoogleCalendarStatus });
         break;
     }
   };

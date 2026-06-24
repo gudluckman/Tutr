@@ -18,12 +18,7 @@ export async function getGoogleCalendarAuthUrl() {
   return data;
 }
 
-export async function syncGoogleCalendarDeletions() {
-  const { data } = await api.post<{ deletedLessons: number }>('/calendar/google/sync-deletions');
-  return data;
-}
-
-export async function syncGoogleCalendarChanges() {
-  const { data } = await api.post<{ updatedLessons: number; deletedLessons: number }>('/calendar/google/sync');
+export async function retryFailedGoogleCalendarSyncs() {
+  const { data } = await api.post<{ attempted: number; synced: number; failed: number }>('/calendar/google/retry-failed');
   return data;
 }

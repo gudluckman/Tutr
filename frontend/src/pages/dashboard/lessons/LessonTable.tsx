@@ -208,9 +208,7 @@ function lessonLinksForDisplay(lesson: Lesson) {
 }
 
 function GoogleBadge({ lesson }: { lesson: Lesson }) {
-  if (lesson.lessonSeriesId) return <Chip size="small" label="Series" sx={badgeSx('green')} />;
   if (!lesson.googleSyncEnabled) return <Chip size="small" label="Not synced" sx={badgeSx('gray')} />;
-  if (lesson.googleSyncStatus === 'SYNCED') return <Chip size="small" label="Synced" sx={badgeSx('green')} />;
   if (lesson.googleSyncStatus === 'FAILED') {
     return (
       <Box sx={{ maxWidth: 208 }}>
@@ -219,6 +217,7 @@ function GoogleBadge({ lesson }: { lesson: Lesson }) {
       </Box>
     );
   }
+  if (lesson.googleSyncStatus === 'SYNCED') return <Chip size="small" label={lesson.lessonSeriesId ? 'Synced · Series' : 'Synced'} sx={badgeSx('green')} />;
   return <Chip size="small" label="Needs connection" sx={badgeSx('yellow')} />;
 }
 

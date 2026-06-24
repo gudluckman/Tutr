@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogContent, FormControlLabel, InputAdornment, Paper, Stack, TextField, Typography } from '@mui/material';
 import type { ChangeEvent, ReactNode } from 'react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { assetUrl } from '../../api/client';
+import { getGoogleCalendarAuthUrl, getGoogleCalendarStatus } from '../../api/calendarApi';
 import { getTutorProfile, updateTutorProfile, uploadTutorProfileImage } from '../../api/tutorApi';
 import { Avatar } from '../../components/ui/Avatar';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
@@ -15,7 +17,9 @@ type TeachingOfferingItem = NonNullable<TutorProfile['teachingOfferings']>[numbe
 
 export function ProfileSettingsPage() {
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const profile = useQuery({ queryKey: ['profile'], queryFn: getTutorProfile });
+  const googleStatus = useQuery({ queryKey: ['google-calendar-status'], queryFn: getGoogleCalendarStatus });
   const [form, setForm] = useState<TutorProfile | null>(null);
   const [subjectModalOpen, setSubjectModalOpen] = useState(false);
   const [activeTeachingYear, setActiveTeachingYear] = useState('Year 12');
@@ -35,6 +39,13 @@ export function ProfileSettingsPage() {
       setForm(data);
     },
   });
+  const connectGoogle = useMutation({
+    mutationFn: getGoogleCalendarAuthUrl,
+    onSuccess: (data) => {
+      if (data.authUrl) window.location.href = data.authUrl;
+    },
+  });
+  const calendarError = searchParams.get('calendarError');
 
   useEffect(() => {
     if (profile.data) {
@@ -107,6 +118,15 @@ export function ProfileSettingsPage() {
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
         Manage your public tutor profile and make it discoverable to parents and students.
       </Typography>
+      {calendarError && (
+        <Paper variant="outlined" sx={{ mb: 3, borderColor: 'error.light', bgcolor: 'error.50', p: 2, color: 'error.dark' }}>
+          <Typography variant="body2">
+            {calendarError === 'oauth'
+              ? 'Google Calendar access was not granted.'
+              : 'Google Calendar could not finish connecting. Check the OAuth configuration and try again.'}
+          </Typography>
+        </Paper>
+      )}
 
       <Box component="form" onSubmit={submit} sx={{ display: 'grid', gap: 3 }}>
         <SettingsPanel title="Profile image">
@@ -317,6 +337,19 @@ export function ProfileSettingsPage() {
           </Stack>
         </SettingsPanel>
 
+        <SettingsPanel title="Integrations">
+          <GoogleCalendarIntegration
+            configured={Boolean(googleStatus.data?.configured)}
+            connected={Boolean(googleStatus.data?.connected)}
+            email={googleStatus.data?.googleAccountEmail}
+            isLoading={googleStatus.isLoading}
+            isConnecting={connectGoogle.isPending}
+            onConnect={() => connectGoogle.mutate()}
+          />
+          <ErrorAlert className="mt-3" error={googleStatus.error} fallback="Could not load Google Calendar status." />
+          <ErrorAlert className="mt-3" error={connectGoogle.error} fallback="Could not start the Google Calendar connection." />
+        </SettingsPanel>
+
         <SettingsPanel title="About you">
           <TextField
             label="Bio"
@@ -350,6 +383,55 @@ function SettingsPanel({ title, children }: { title: string; children: ReactNode
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>{title}</Typography>
       {children}
     </Paper>
+  );
+}
+
+function GoogleCalendarIntegration({
+  configured,
+  connected,
+  email,
+  isLoading,
+  isConnecting,
+  onConnect,
+}: {
+  configured: boolean;
+  connected: boolean;
+  email?: string | null;
+  isLoading: boolean;
+  isConnecting: boolean;
+  onConnect: () => void;
+}) {
+  return (
+    <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'grid', placeItems: 'center', width: 44, height: 44, borderRadius: 2, bgcolor: connected ? 'success.50' : 'grey.100', color: connected ? 'success.dark' : 'text.secondary' }}>
+          <Icon name="calendar" className="h-5 w-5" />
+        </Box>
+        <Box>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Typography sx={{ fontWeight: 600 }}>Google Calendar</Typography>
+            {!isLoading && <Chip size="small" color={connected ? 'success' : 'default'} label={connected ? 'Connected' : 'Not connected'} />}
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {connected
+              ? `${email || 'Google account'} · Tutr sends selected lessons for reminders and invitations.`
+              : 'Connect Google Calendar to receive copies of lessons scheduled in Tutr.'}
+          </Typography>
+        </Box>
+      </Stack>
+      <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap' }}>
+        {connected && (
+          <Button type="button" component="a" href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noreferrer" variant="outlined">
+            Open Google Calendar
+          </Button>
+        )}
+        {!connected && (
+          <Button type="button" variant="contained" color="success" disabled={!configured || isLoading || isConnecting} onClick={onConnect}>
+            {isConnecting ? 'Connecting…' : configured ? 'Connect' : 'Not configured'}
+          </Button>
+        )}
+      </Stack>
+    </Stack>
   );
 }
 

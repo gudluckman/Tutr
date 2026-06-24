@@ -1,8 +1,6 @@
 import type { LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../../types/lesson';
 import { toDateTimeLocal } from './lessonUtils';
 
-export const googleCalendarSyncStorageKey = 'tutr.googleCalendarSyncAt';
-
 export const googleCalendarColors = [
   { id: '', label: 'Default', swatch: '#16a34a' },
   { id: '1', label: 'Lavender', swatch: '#7986cb' },

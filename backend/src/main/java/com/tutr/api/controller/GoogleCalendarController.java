@@ -64,14 +64,9 @@ public class GoogleCalendarController {
         return new GoogleCalendarAuthUrlResponse(true, googleCalendar.authUrl(jwtService.createToken(user)));
     }
 
-    @PostMapping("/sync-deletions")
-    GoogleCalendarDeletionSyncResponse syncDeletedEvents(@AuthenticationPrincipal User user) {
-        return new GoogleCalendarDeletionSyncResponse(googleCalendar.syncDeletedLessons(user));
-    }
-
-    @PostMapping("/sync")
-    GoogleCalendarSyncResponse syncEvents(@AuthenticationPrincipal User user) {
-        return googleCalendar.syncCalendarChanges(user);
+    @PostMapping("/retry-failed")
+    GoogleCalendarRetryResponse retryFailedSyncs(@AuthenticationPrincipal User user) {
+        return googleCalendar.retryFailedSyncs(user);
     }
 
     @GetMapping("/callback")

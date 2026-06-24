@@ -17,17 +17,15 @@ import {
   Typography,
 } from '@mui/material';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { getGoogleCalendarAuthUrl, getGoogleCalendarStatus, syncGoogleCalendarChanges } from '../../api/calendarApi';
+import { getGoogleCalendarStatus, retryFailedGoogleCalendarSyncs } from '../../api/calendarApi';
 import { createLesson, createRecurringLessons, deleteFollowingLessons, deleteLesson, deleteLessonSeries, listLessons, updateLesson, updateLessonStatuses } from '../../api/lessonApi';
 import { listStudents } from '../../api/studentApi';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
 import { Icon } from '../../components/ui/Icon';
 import type { Lesson, LessonPayload, LessonStatus, PaymentStatus, RecurringLessonPayload } from '../../types/lesson';
 import type { Student } from '../../types/student';
-import { emptyLesson, emptyRecurring, googleCalendarSyncStorageKey, paymentStatusOptions } from './lessons/constants';
+import { emptyLesson, emptyRecurring, paymentStatusOptions } from './lessons/constants';
 import { DeleteLessonDialog } from './lessons/DeleteLessonDialog';
-import { GoogleCalendarPanel } from './lessons/GoogleCalendarPanel';
 import { LessonCalendar } from './lessons/LessonCalendar';
 import { RecurringFields, SingleLessonFields } from './lessons/LessonFormFields';
 import { LessonTable } from './lessons/LessonTable';
@@ -64,7 +62,6 @@ const calendarViews: CalendarView[] = ['DAILY', 'WEEKLY', 'MONTHLY'];
 
 export function LessonsPage() {
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [mode, setMode] = useState<FormMode>('single');
   const [workspaceView, setWorkspaceView] = useState<LessonsWorkspaceView>('CALENDAR');
@@ -80,7 +77,6 @@ export function LessonsPage() {
   const lessons = useQuery({ queryKey: ['lessons'], queryFn: listLessons });
   const students = useQuery({ queryKey: ['students'], queryFn: listStudents });
   const googleStatus = useQuery({ queryKey: ['google-calendar-status'], queryFn: getGoogleCalendarStatus });
-  const calendarError = searchParams.get('calendarError');
   const lessonList = lessons.data ?? [];
   const studentList = students.data ?? [];
   const filteredLessons = useMemo(() => filterLessons(lessonList, studentList, filters), [filters, lessonList, studentList]);
@@ -163,46 +159,17 @@ export function LessonsPage() {
     },
   });
 
-  const connectGoogle = useMutation({
-    mutationFn: getGoogleCalendarAuthUrl,
-    onSuccess: (data) => {
-      if (data.authUrl) window.location.href = data.authUrl;
-    },
+  const retryGoogleSync = useMutation({
+    mutationFn: retryFailedGoogleCalendarSyncs,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lessons'] }),
   });
-
-  const syncGoogleCalendar = useMutation({
-    mutationFn: syncGoogleCalendarChanges,
-    onSuccess: (data) => {
-      sessionStorage.setItem(googleCalendarSyncStorageKey, String(Date.now()));
-      if (data.updatedLessons > 0 || data.deletedLessons > 0) {
-        queryClient.invalidateQueries({ queryKey: ['lessons'] });
-      }
-    },
-  });
-
-  useEffect(() => {
-    if (!googleStatus.data?.connected) {
-      return;
-    }
-    const syncIfStale = () => {
-      const lastSyncAt = Number(sessionStorage.getItem(googleCalendarSyncStorageKey) ?? 0);
-      if (Date.now() - lastSyncAt > 60_000 && !syncGoogleCalendar.isPending) {
-        syncGoogleCalendar.mutate();
-      }
-    };
-    syncIfStale();
-    const interval = window.setInterval(syncIfStale, 60_000);
-    const syncOnFocus = () => {
-      if (document.visibilityState === 'visible') {
-        syncIfStale();
-      }
-    };
-    document.addEventListener('visibilitychange', syncOnFocus);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', syncOnFocus);
-    };
-  }, [googleStatus.data?.connected, syncGoogleCalendar.isPending]);
+  const failedGoogleSyncCount = new Set(lessonList
+    .filter((lesson) => (
+      lesson.googleSyncEnabled
+      && (lesson.googleSyncStatus === 'FAILED' || lesson.googleSyncStatus === 'NOT_CONNECTED')
+    ))
+    .map((lesson) => lesson.lessonSeriesId ? `series:${lesson.lessonSeriesId}` : `lesson:${lesson.id}`))
+    .size;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -296,23 +263,34 @@ export function LessonsPage() {
         </Stack>
       </Stack>
 
-      <GoogleCalendarPanel
-        configured={Boolean(googleStatus.data?.configured)}
-        connected={Boolean(googleStatus.data?.connected)}
-        email={googleStatus.data?.googleAccountEmail}
-        onConnect={() => connectGoogle.mutate()}
-        isConnecting={connectGoogle.isPending}
-        onSyncChanges={() => syncGoogleCalendar.mutate()}
-        isSyncingChanges={syncGoogleCalendar.isPending}
-      />
-
       <ErrorAlert className="mb-6" error={lessons.error} fallback="Could not load lessons. Please refresh the page." />
       <ErrorAlert className="mb-6" error={students.error} fallback="Could not load students for lesson scheduling. Please refresh the page." />
       <ErrorAlert className="mb-6" error={googleStatus.error} fallback="Could not load Google Calendar status. Please refresh the page." />
-      <ErrorAlert className="mb-6" error={connectGoogle.error} fallback="Could not start Google Calendar connection. Please try again." />
-      <ErrorAlert className="mb-6" error={syncGoogleCalendar.error} fallback="Could not sync Google Calendar changes. Please try again." />
+      <ErrorAlert className="mb-6" error={retryGoogleSync.error} fallback="Could not retry failed Google Calendar syncs." />
       <ErrorAlert className="mb-6" error={remove.error} fallback="Could not delete the lesson. Please try again." />
       <ErrorAlert className="mb-6" error={updateStatuses.error} fallback="Could not update the lesson status. Please try again." />
+
+      {failedGoogleSyncCount > 0 && (
+        <Paper variant="outlined" sx={{ mb: 3, p: 2, borderColor: 'warning.light', bgcolor: 'warning.50' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 600 }}>{failedGoogleSyncCount} lesson sync{failedGoogleSyncCount === 1 ? '' : 's'} need attention</Typography>
+              <Typography variant="body2" color="text.secondary">Your Tutr schedule is unchanged. Retry sending these lessons to Google Calendar.</Typography>
+            </Box>
+            <Button variant="outlined" color="warning" disabled={retryGoogleSync.isPending || !googleStatus.data?.connected} onClick={() => retryGoogleSync.mutate()}>
+              {retryGoogleSync.isPending ? 'Retrying…' : 'Retry failed syncs'}
+            </Button>
+          </Stack>
+        </Paper>
+      )}
+      {retryGoogleSync.isSuccess && (
+        <Paper variant="outlined" sx={{ mb: 3, p: 2, borderColor: retryGoogleSync.data.failed ? 'warning.light' : 'success.light', bgcolor: retryGoogleSync.data.failed ? 'warning.50' : 'success.50' }}>
+          <Typography variant="body2">
+            {retryGoogleSync.data.synced} Google Calendar sync{retryGoogleSync.data.synced === 1 ? '' : 's'} recovered
+            {retryGoogleSync.data.failed ? `; ${retryGoogleSync.data.failed} still need attention.` : '.'}
+          </Typography>
+        </Paper>
+      )}
 
       {deletingLesson && (
         <DeleteLessonDialog
@@ -329,14 +307,6 @@ export function LessonsPage() {
         onClose={() => setChoosingUpdateScope(false)}
         onConfirm={confirmUpdateLesson}
       />
-
-      {calendarError && (
-        <Paper variant="outlined" sx={{ mb: 3, borderColor: 'error.light', bgcolor: 'error.50', p: 2, color: 'error.dark', fontSize: 14 }}>
-          {calendarError === 'oauth'
-            ? 'Google did not grant Calendar access. Make sure you choose your listed test account, press Continue on the unverified-app screen, and allow the Calendar permission.'
-            : 'Google Calendar could not finish connecting. Check that the OAuth client secret and redirect URI match your Google Cloud settings.'}
-        </Paper>
-      )}
 
       {showForm && (
         <Paper variant="outlined" sx={{ mb: 3, p: { xs: 2, sm: 3 }, borderRadius: 2 }}>
