@@ -93,11 +93,106 @@ public class LessonService {
     public LessonResponse update(User tutor, UUID id, LessonRequest request) {
         Lesson lesson = materializedLessonFor(tutor, id);
         CalendarDetails previousCalendarDetails = CalendarDetails.from(lesson);
+        LessonSeries series = lesson.getLessonSeries();
         apply(tutor, lesson, request);
+        if (series != null && !previousCalendarDetails.lessonDate().equals(lesson.getLessonDate())) {
+            excludeOccurrence(series, previousCalendarDetails.lessonDate());
+        }
         if (!previousCalendarDetails.equals(CalendarDetails.from(lesson))) {
             googleCalendar.syncLesson(lesson, previousCalendarDetails.lessonDate());
         }
         return LessonResponse.from(lesson);
+    }
+
+    @Transactional
+    public LessonResponse updateFollowing(User tutor, UUID id, LessonRequest request) {
+        OccurrenceAnchor anchor = occurrenceAnchorFor(tutor, id);
+        if (anchor.series() == null) {
+            return update(tutor, id, request);
+        }
+
+        LessonSeries originalSeries = anchor.series();
+        if (!anchor.lessonDate().isAfter(originalSeries.getFirstLessonDate())) {
+            return updateSeries(tutor, id, request);
+        }
+        List<Lesson> followingLessons = lessons.findByLessonSeriesOrderByLessonDateAsc(originalSeries).stream()
+                .filter(lesson -> !lesson.getLessonDate().isBefore(anchor.lessonDate()))
+                .toList();
+        LessonSeries newSeries = copySeriesForFollowing(originalSeries, anchor.lessonDate(), request.lessonDate());
+        apply(newSeries, tutor, request);
+        newSeries.setRecurrenceRule(googleCalendar.rrule(newSeries));
+        Lesson cutoffLesson = transientLesson(new VirtualOccurrence(originalSeries, anchor.lessonDate()));
+        googleCalendar.endSeriesBefore(cutoffLesson, followingLessons);
+        lessonSeries.save(newSeries);
+
+        long shiftMillis = request.lessonDate().toEpochMilli() - anchor.lessonDate().toEpochMilli();
+        Lesson updatedLesson = null;
+        for (Lesson lesson : followingLessons) {
+            Instant originalDate = lesson.getLessonDate();
+            LessonStatus status = lesson.getStatus();
+            PaymentStatus paymentStatus = lesson.getPaymentStatus();
+            lesson.setLessonSeries(newSeries);
+            apply(tutor, lesson, request);
+            lesson.setStatus(status);
+            lesson.setPaymentStatus(paymentStatus);
+            lesson.setLessonDate(originalDate.plusMillis(shiftMillis));
+            lesson.setGoogleEventId(null);
+            lesson.setGoogleCalendarId(null);
+            lesson.setGoogleMeetLink(newSeries.getGoogleMeetLink());
+            if (originalDate.equals(anchor.lessonDate())) {
+                updatedLesson = lesson;
+            }
+        }
+        googleCalendar.syncSeries(newSeries);
+
+        if (updatedLesson != null) {
+            return LessonResponse.from(updatedLesson);
+        }
+        return LessonResponse.fromSeriesOccurrence(newSeries, request.lessonDate(), occurrenceId(newSeries, request.lessonDate()));
+    }
+
+    @Transactional
+    public LessonResponse updateSeries(User tutor, UUID id, LessonRequest request) {
+        OccurrenceAnchor anchor = occurrenceAnchorFor(tutor, id);
+        if (anchor.series() == null) {
+            return update(tutor, id, request);
+        }
+
+        LessonSeries series = anchor.series();
+        long shiftMillis = request.lessonDate().toEpochMilli() - anchor.lessonDate().toEpochMilli();
+        series.setFirstLessonDate(series.getFirstLessonDate().plusMillis(shiftMillis));
+        if (series.getRecurrenceUntil() != null) {
+            series.setRecurrenceUntil(series.getRecurrenceUntil().plusMillis(shiftMillis));
+        }
+        series.setExcludedLessonDates(series.getExcludedLessonDates() == null
+                ? List.of()
+                : series.getExcludedLessonDates().stream().map(date -> date.plusMillis(shiftMillis)).toList());
+        apply(series, tutor, request);
+        series.setRecurrenceRule(googleCalendar.rrule(series));
+
+        Lesson updatedLesson = null;
+        for (Lesson lesson : lessons.findByLessonSeriesOrderByLessonDateAsc(series)) {
+            Instant originalDate = lesson.getLessonDate();
+            LessonStatus status = lesson.getStatus();
+            PaymentStatus paymentStatus = lesson.getPaymentStatus();
+            apply(tutor, lesson, request);
+            lesson.setStatus(status);
+            lesson.setPaymentStatus(paymentStatus);
+            lesson.setLessonDate(originalDate.plusMillis(shiftMillis));
+            lesson.setGoogleEventId(null);
+            lesson.setGoogleCalendarId(null);
+            lesson.setGoogleMeetLink(series.getGoogleMeetLink());
+            if (originalDate.equals(anchor.lessonDate())) {
+                updatedLesson = lesson;
+            }
+        }
+        googleCalendar.syncSeries(series);
+
+        Instant updatedDate = anchor.lessonDate().plusMillis(shiftMillis);
+        if (updatedLesson != null) {
+            return LessonResponse.from(updatedLesson);
+        }
+        return LessonResponse.fromSeriesOccurrence(series, updatedDate, occurrenceId(series, updatedDate));
     }
 
     @Transactional
@@ -230,6 +325,40 @@ public class LessonService {
         return lessons.save(transientLesson(occurrence));
     }
 
+    private OccurrenceAnchor occurrenceAnchorFor(User tutor, UUID id) {
+        Optional<Lesson> stored = lessons.findByIdAndTutor(id, tutor);
+        if (stored.isPresent()) {
+            Lesson lesson = stored.get();
+            return new OccurrenceAnchor(lesson.getLessonSeries(), lesson.getLessonDate());
+        }
+        VirtualOccurrence occurrence = virtualOccurrenceFor(tutor, id)
+                .orElseThrow(() -> new EntityNotFoundException("Lesson not found"));
+        return new OccurrenceAnchor(occurrence.series(), occurrence.lessonDate());
+    }
+
+    private LessonSeries copySeriesForFollowing(LessonSeries source, Instant cutoffDate, Instant newFirstDate) {
+        LessonSeries target = new LessonSeries();
+        target.setTutor(source.getTutor());
+        target.setFrequency(source.getFrequency());
+        target.setIntervalCount(source.getIntervalCount());
+        target.setFirstLessonDate(newFirstDate);
+        if (source.getOccurrenceCount() != null) {
+            long intervalDays = 7L * source.getIntervalCount();
+            long elapsedOccurrences = ChronoUnit.DAYS.between(source.getFirstLessonDate(), cutoffDate) / intervalDays;
+            target.setOccurrenceCount(Math.max(1, source.getOccurrenceCount() - (int) elapsedOccurrences));
+        } else if (source.getRecurrenceUntil() != null) {
+            long shiftMillis = newFirstDate.toEpochMilli() - cutoffDate.toEpochMilli();
+            target.setRecurrenceUntil(source.getRecurrenceUntil().plusMillis(shiftMillis));
+        }
+        target.setExcludedLessonDates(source.getExcludedLessonDates() == null
+                ? List.of()
+                : source.getExcludedLessonDates().stream()
+                        .filter(date -> !date.isBefore(cutoffDate))
+                        .map(date -> date.plusMillis(newFirstDate.toEpochMilli() - cutoffDate.toEpochMilli()))
+                        .toList());
+        return target;
+    }
+
     private Optional<VirtualOccurrence> virtualOccurrenceFor(User tutor, UUID id) {
         Instant now = Instant.now();
         Instant windowStart = now.minus(LAZY_RECURRING_LOOKBACK_DAYS, ChronoUnit.DAYS);
@@ -356,6 +485,22 @@ public class LessonService {
         lesson.setGoogleSyncEnabled(Boolean.TRUE.equals(request.syncToGoogle()));
     }
 
+    private void apply(LessonSeries series, User tutor, LessonRequest request) {
+        series.setStudent(students.studentFor(tutor, request.studentId()));
+        series.setTitle(request.title());
+        series.setDurationMinutes(request.durationMinutes());
+        series.setHourlyRate(request.hourlyRate());
+        series.setLessonNotes(request.lessonNotes());
+        series.setHomework(request.homework());
+        List<LessonLink> links = lessonLinks(request.lessonLinks(), request.miroBoardUrl());
+        series.setLessonLinks(links);
+        series.setMiroBoardUrl(boardUrl(links, request.miroBoardUrl()));
+        series.setInviteEmail(inviteEmail(request.inviteEmail(), series.getStudent().getParentEmail()));
+        series.setGoogleColorId(googleColorId(request.googleColorId()));
+        series.setGoogleExtraReminderMinutes(googleExtraReminderMinutes(request.googleExtraReminderMinutes()));
+        series.setGoogleSyncEnabled(Boolean.TRUE.equals(request.syncToGoogle()));
+    }
+
     private String googleColorId(String requestedColorId) {
         if (requestedColorId == null || requestedColorId.isBlank()) {
             return null;
@@ -446,5 +591,8 @@ public class LessonService {
     }
 
     private record VirtualOccurrence(LessonSeries series, Instant lessonDate) {
+    }
+
+    private record OccurrenceAnchor(LessonSeries series, Instant lessonDate) {
     }
 }

@@ -31,7 +31,8 @@ import { GoogleCalendarPanel } from './lessons/GoogleCalendarPanel';
 import { LessonCalendar } from './lessons/LessonCalendar';
 import { RecurringFields, SingleLessonFields } from './lessons/LessonFormFields';
 import { LessonTable } from './lessons/LessonTable';
-import type { CalendarView, FormMode, LessonDeleteScope, LessonsWorkspaceView } from './lessons/types';
+import type { CalendarView, FormMode, LessonDeleteScope, LessonUpdateScope, LessonsWorkspaceView } from './lessons/types';
+import { UpdateRecurringLessonDialog } from './lessons/UpdateRecurringLessonDialog';
 import {
   startOfDay,
   searchMatcher,
@@ -70,6 +71,7 @@ export function LessonsPage() {
   const [calendarView, setCalendarView] = useState<CalendarView>(() => storedLessonCalendarView());
   const [calendarDate, setCalendarDate] = useState(() => startOfDay(new Date()));
   const [editing, setEditing] = useState<Lesson | null>(null);
+  const [choosingUpdateScope, setChoosingUpdateScope] = useState(false);
   const [deletingLesson, setDeletingLesson] = useState<Lesson | null>(null);
   const [form, setForm] = useState<LessonPayload>(emptyLesson);
   const [recurringForm, setRecurringForm] = useState<RecurringLessonPayload>(emptyRecurring);
@@ -88,9 +90,9 @@ export function LessonsPage() {
   }, [calendarView]);
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: (scope: LessonUpdateScope = 'SINGLE') => {
       const payload = { ...form, lessonDate: new Date(form.lessonDate).toISOString(), syncToGoogle: form.syncToGoogle };
-      return editing ? updateLesson(editing.id, payload) : createLesson(payload);
+      return editing ? updateLesson(editing.id, payload, scope) : createLesson(payload);
     },
     onSuccess: (lesson) => {
       queryClient.invalidateQueries({ queryKey: ['lessons'] });
@@ -208,7 +210,16 @@ export function LessonsPage() {
       saveRecurring.mutate();
       return;
     }
-    save.mutate();
+    if (editing?.lessonSeriesId) {
+      setChoosingUpdateScope(true);
+      return;
+    }
+    save.mutate('SINGLE');
+  }
+
+  function confirmUpdateLesson(scope: LessonUpdateScope) {
+    setChoosingUpdateScope(false);
+    save.mutate(scope);
   }
 
   function edit(lesson: Lesson) {
@@ -311,6 +322,13 @@ export function LessonsPage() {
           onConfirm={confirmRemoveLesson}
         />
       )}
+
+      <UpdateRecurringLessonDialog
+        open={choosingUpdateScope}
+        isUpdating={save.isPending}
+        onClose={() => setChoosingUpdateScope(false)}
+        onConfirm={confirmUpdateLesson}
+      />
 
       {calendarError && (
         <Paper variant="outlined" sx={{ mb: 3, borderColor: 'error.light', bgcolor: 'error.50', p: 2, color: 'error.dark', fontSize: 14 }}>

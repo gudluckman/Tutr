@@ -304,8 +304,15 @@ public class GoogleCalendarSyncService {
                     series.getGoogleColorId(),
                     series.getGoogleExtraReminderMinutes()
             );
-            // Always use the canonical RRULE stored on the series.
-            event.put("recurrence", List.of(series.getRecurrenceRule()));
+            // Always use the canonical RRULE and preserve locally excluded occurrences.
+            List<String> recurrence = new ArrayList<>();
+            recurrence.add(series.getRecurrenceRule());
+            if (series.getExcludedLessonDates() != null) {
+                series.getExcludedLessonDates().stream()
+                        .map(date -> "EXDATE:" + GOOGLE_EXDATE_FORMATTER.format(date))
+                        .forEach(recurrence::add);
+            }
+            event.put("recurrence", recurrence);
 
             Map<String, Object> response;
             if (isBlank(series.getGoogleEventId())) {
@@ -372,7 +379,14 @@ public class GoogleCalendarSyncService {
     @Transactional
     public void endSeriesBefore(Lesson lesson, List<Lesson> followingLessons) {
         LessonSeries series = lesson.getLessonSeries();
-        if (series == null || isBlank(series.getGoogleEventId())) return;
+        if (series == null) return;
+
+        Instant until = lesson.getLessonDate().minusSeconds(1);
+        series.setOccurrenceCount(null);
+        series.setRecurrenceUntil(until);
+        series.setRecurrenceRule(rrule(series));
+
+        if (isBlank(series.getGoogleEventId())) return;
 
         GoogleCalendarConnection connection = connectionFor(series.getTutor())
                 .orElseThrow(() -> new IllegalStateException(
@@ -385,11 +399,6 @@ public class GoogleCalendarSyncService {
 
         // Google treats RRULE UNTIL as inclusive, so put the boundary one second before
         // the first removed occurrence. These lessons are date-time events in UTC.
-        Instant until = lesson.getLessonDate().minusSeconds(1);
-        series.setOccurrenceCount(null);
-        series.setRecurrenceUntil(until);
-        series.setRecurrenceRule(rrule(series));
-
         try {
             restClient.patch()
                     .uri("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/{eventId}"

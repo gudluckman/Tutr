@@ -16,8 +16,9 @@ export async function createRecurringLessons(payload: RecurringLessonPayload) {
   return data;
 }
 
-export async function updateLesson(id: string, payload: LessonPayload) {
-  const { data } = await api.put<Lesson>(`/lessons/${id}`, payload);
+export async function updateLesson(id: string, payload: LessonPayload, scope: 'SINGLE' | 'FOLLOWING' | 'SERIES' = 'SINGLE') {
+  const suffix = scope === 'SERIES' ? '/series' : scope === 'FOLLOWING' ? '/following' : '';
+  const { data } = await api.put<Lesson>(`/lessons/${id}${suffix}`, payload);
   return data;
 }
 

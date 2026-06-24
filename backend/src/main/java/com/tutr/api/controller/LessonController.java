@@ -60,6 +60,16 @@ public class LessonController {
         return service.update(user, id, request);
     }
 
+    @PutMapping("/{id}/following")
+    LessonResponse updateFollowing(@AuthenticationPrincipal User user, @PathVariable UUID id, @Valid @RequestBody LessonRequest request) {
+        return service.updateFollowing(user, id, request);
+    }
+
+    @PutMapping("/{id}/series")
+    LessonResponse updateSeries(@AuthenticationPrincipal User user, @PathVariable UUID id, @Valid @RequestBody LessonRequest request) {
+        return service.updateSeries(user, id, request);
+    }
+
     @PutMapping("/{id}/statuses")
     LessonResponse updateStatuses(@AuthenticationPrincipal User user, @PathVariable UUID id, @RequestBody LessonStatusRequest request) {
         return service.updateStatuses(user, id, request);
