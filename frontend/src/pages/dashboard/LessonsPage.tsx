@@ -184,6 +184,47 @@ export function LessonsPage() {
     save.mutate('SINGLE');
   }
 
+  function changeMode(nextMode: FormMode) {
+    if (nextMode === mode) return;
+
+    if (nextMode === 'recurring') {
+      setRecurringForm((current) => ({
+        ...current,
+        studentId: form.studentId,
+        title: form.title,
+        firstLessonDate: form.lessonDate,
+        durationMinutes: form.durationMinutes,
+        hourlyRate: form.hourlyRate,
+        lessonNotes: form.lessonNotes,
+        homework: form.homework,
+        miroBoardUrl: form.miroBoardUrl,
+        lessonLinks: form.lessonLinks,
+        inviteEmail: form.inviteEmail,
+        googleColorId: form.googleColorId,
+        googleExtraReminderMinutes: form.googleExtraReminderMinutes,
+        syncToGoogle: form.syncToGoogle,
+      }));
+    } else {
+      setForm((current) => ({
+        ...current,
+        studentId: recurringForm.studentId,
+        title: recurringForm.title,
+        lessonDate: recurringForm.firstLessonDate,
+        durationMinutes: recurringForm.durationMinutes,
+        hourlyRate: recurringForm.hourlyRate,
+        lessonNotes: recurringForm.lessonNotes,
+        homework: recurringForm.homework,
+        miroBoardUrl: recurringForm.miroBoardUrl,
+        lessonLinks: recurringForm.lessonLinks,
+        inviteEmail: recurringForm.inviteEmail,
+        googleColorId: recurringForm.googleColorId,
+        googleExtraReminderMinutes: recurringForm.googleExtraReminderMinutes,
+        syncToGoogle: recurringForm.syncToGoogle,
+      }));
+    }
+    setMode(nextMode);
+  }
+
   function confirmUpdateLesson(scope: LessonUpdateScope) {
     setChoosingUpdateScope(false);
     save.mutate(scope);
@@ -318,7 +359,7 @@ export function LessonsPage() {
                   exclusive
                   value={mode}
                   size="small"
-                  onChange={(_, value: FormMode | null) => value && setMode(value)}
+                  onChange={(_, value: FormMode | null) => value && changeMode(value)}
                   aria-label="Lesson form mode"
                   sx={{ ...segmentedControlSx, mt: 1.5 }}
                 >
