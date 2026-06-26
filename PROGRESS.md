@@ -421,41 +421,6 @@ profile media.
 - Revisit exact payment tracking only after the current simplified paid/unpaid
   workflow has been beta-tested.
 
-## 2026-06-26 - Render Cron Keep-Awake
-
-### Completed
-
-- Confirmed the existing hosted keep-awake setup used a GitHub Actions schedule
-  that pinged the public backend health endpoint.
-- Added a Render Blueprint cron service named `tutr-api-keep-awake` that runs
-  every 10 minutes.
-- Added `scripts/keep_api_awake.py` to ping `TUTR_API_HEALTH_URL` with standard
-  Python libraries so the cron job does not depend on curl or the backend Java
-  image.
-- Set the Render cron environment variable to
-  `https://tutr-api.onrender.com/api/v1/health`.
-- Updated deployment docs to explain the Render cron service and the existing
-  GitHub Actions workflow as a fallback.
-- Verified the Python keep-awake script handles a missing URL safely and
-  succeeds against the deployed health endpoint with `204 No Content`.
-- Confirmed `render.yaml` parses successfully after adding the cron service.
-
-### Outcome
-
-Tutr now has a Render-managed keep-awake cron job in the deployment Blueprint,
-with the earlier GitHub Actions schedule still available as a fallback. The
-hosted API should be less likely to go fully cold between beta sessions, while
-the health ping remains lightweight and unauthenticated.
-
-### Next
-
-- Sync the updated Blueprint in Render and confirm the `tutr-api-keep-awake`
-  service is created successfully.
-- Decide whether to leave the GitHub Actions keep-awake variable unset to avoid
-  duplicate scheduled pings.
-- Monitor the first few Render cron runs and check whether the 10-minute
-  interval is enough for the free-tier idle window.
-
 ## Current Focus
 
 - Stabilize the beta deployment and verify the full hosted workflow after each

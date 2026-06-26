@@ -42,14 +42,3 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
-
-  - type: cron
-    name: tutr-api-keep-awake
-    runtime: python
-    schedule: '*/10 * * * *'
-    buildCommand: 'true'
-    startCommand: python scripts/keep_api_awake.py
-    autoDeployTrigger: commit
-    envVars:
-      - key: TUTR_API_HEALTH_URL
-        value: https://tutr-api.onrender.com/api/v1/health
