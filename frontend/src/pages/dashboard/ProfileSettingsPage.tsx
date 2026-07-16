@@ -425,15 +425,13 @@ function GoogleCalendarIntegration({
             Open Google Calendar
           </Button>
         )}
-        {!connected && (
-          <Button type="button" variant="contained" color="success" disabled={!configured || isLoading || isConnecting} onClick={onConnect}>
-            {isConnecting ? 'Connecting…' : configured ? 'Connect' : 'Not configured'}
-          </Button>
-        )}
+        <Button type="button" variant="contained" color="success" disabled={!configured || isLoading || isConnecting} onClick={onConnect}>
+          {isConnecting ? 'Reconnecting…' : connected ? 'Reconnect' : configured ? 'Connect' : 'Not configured'}
+        </Button>
       </Stack>
     </Stack>
-  );
-}
+    );
+  }
 
 function validTeachingOfferings(profile: TutorProfile) {
   const offerings = profile.teachingOfferings?.length

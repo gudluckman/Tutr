@@ -19,6 +19,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  RefreshCcw,
   Search,
   Trash2,
   TriangleAlert,
@@ -60,6 +61,7 @@ const icons = {
   book: BookOpen,
   video: Video,
   historicalStats: ChartNoAxesCombined,
+  refresh: RefreshCcw,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof icons;

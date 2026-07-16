@@ -17,7 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { getGoogleCalendarStatus, retryFailedGoogleCalendarSyncs } from '../../api/calendarApi';
+import { getGoogleCalendarAuthUrl, getGoogleCalendarStatus, retryFailedGoogleCalendarSyncs } from '../../api/calendarApi';
 import { createLesson, createRecurringLessons, deleteFollowingLessons, deleteLesson, deleteLessonSeries, listLessons, updateLesson, updateLessonStatuses } from '../../api/lessonApi';
 import { listStudents } from '../../api/studentApi';
 import { ErrorAlert } from '../../components/ui/ErrorAlert';
@@ -80,6 +80,12 @@ export function LessonsPage() {
   const lessonList = lessons.data ?? [];
   const studentList = students.data ?? [];
   const filteredLessons = useMemo(() => filterLessons(lessonList, studentList, filters), [filters, lessonList, studentList]);
+  const reconnectGoogle = useMutation({
+    mutationFn: getGoogleCalendarAuthUrl,
+    onSuccess: (data) => {
+      if (data.authUrl) window.location.href = data.authUrl;
+    },
+  });
 
   useEffect(() => {
     localStorage.setItem(lessonCalendarViewStorageKey, calendarView);
@@ -294,6 +300,16 @@ export function LessonsPage() {
             ))}
           </ToggleButtonGroup>
           <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<Icon name="refresh" className="h-4 w-4" />}
+            onClick={() => reconnectGoogle.mutate()}
+            disabled={reconnectGoogle.isPending || !googleStatus.data?.configured}
+            sx={{ minWidth: 176, whiteSpace: 'nowrap', fontSize: 12, px: 1.75 }}
+          >
+            {reconnectGoogle.isPending ? 'Reconnecting…' : 'Reconnect Google Calendar'}
+          </Button>
+          <Button
             variant="contained"
             startIcon={<Icon name="plus" className="h-4 w-4" />}
             onClick={() => setShowForm(true)}
@@ -307,6 +323,7 @@ export function LessonsPage() {
       <ErrorAlert className="mb-6" error={lessons.error} fallback="Could not load lessons. Please refresh the page." />
       <ErrorAlert className="mb-6" error={students.error} fallback="Could not load students for lesson scheduling. Please refresh the page." />
       <ErrorAlert className="mb-6" error={googleStatus.error} fallback="Could not load Google Calendar status. Please refresh the page." />
+      <ErrorAlert className="mb-6" error={reconnectGoogle.error} fallback="Could not start the Google Calendar reconnection." />
       <ErrorAlert className="mb-6" error={retryGoogleSync.error} fallback="Could not retry failed Google Calendar syncs." />
       <ErrorAlert className="mb-6" error={remove.error} fallback="Could not delete the lesson. Please try again." />
       <ErrorAlert className="mb-6" error={updateStatuses.error} fallback="Could not update the lesson status. Please try again." />
