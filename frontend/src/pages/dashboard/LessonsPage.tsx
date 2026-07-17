@@ -307,7 +307,7 @@ export function LessonsPage() {
             disabled={reconnectGoogle.isPending || !googleStatus.data?.configured}
             sx={{ minWidth: 176, whiteSpace: 'nowrap', fontSize: 12, px: 1.75 }}
           >
-            {reconnectGoogle.isPending ? 'Reconnecting…' : 'Sync Calendar'}
+            {reconnectGoogle.isPending ? 'Reconnecting…' : 'Reconnect Calendar'}
           </Button>
           <Button
             variant="contained"
@@ -327,6 +327,20 @@ export function LessonsPage() {
       <ErrorAlert className="mb-6" error={retryGoogleSync.error} fallback="Could not retry failed Google Calendar syncs." />
       <ErrorAlert className="mb-6" error={remove.error} fallback="Could not delete the lesson. Please try again." />
       <ErrorAlert className="mb-6" error={updateStatuses.error} fallback="Could not update the lesson status. Please try again." />
+
+      {googleStatus.data?.configured && !googleStatus.isLoading && !googleStatus.data.connected && (
+        <Paper variant="outlined" sx={{ mb: 3, p: 2, borderColor: 'warning.light', bgcolor: 'warning.50' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+            <Box>
+              <Typography sx={{ fontWeight: 600 }}>Google Calendar is disconnected</Typography>
+              <Typography variant="body2" color="text.secondary">Reconnect it before adding or updating lessons you want to appear in Google Calendar.</Typography>
+            </Box>
+            <Button variant="outlined" color="warning" disabled={reconnectGoogle.isPending} onClick={() => reconnectGoogle.mutate()}>
+              {reconnectGoogle.isPending ? 'Reconnecting…' : 'Reconnect Calendar'}
+            </Button>
+          </Stack>
+        </Paper>
+      )}
 
       {failedGoogleSyncCount > 0 && (
         <Paper variant="outlined" sx={{ mb: 3, p: 2, borderColor: 'warning.light', bgcolor: 'warning.50' }}>
@@ -392,6 +406,13 @@ export function LessonsPage() {
 
           <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
             <ErrorAlert className="md:col-span-2" error={mode === 'recurring' && !editing ? saveRecurring.error : save.error} fallback="Could not save the lesson. Please check the details and try again." />
+            <GoogleCalendarSaveReminder
+              syncToGoogle={mode === 'recurring' && !editing ? Boolean(recurringForm.syncToGoogle) : Boolean(form.syncToGoogle)}
+              connected={Boolean(googleStatus.data?.connected)}
+              configured={Boolean(googleStatus.data?.configured)}
+              isReconnecting={reconnectGoogle.isPending}
+              onReconnect={() => reconnectGoogle.mutate()}
+            />
             {mode === 'recurring' && !editing ? (
               <RecurringFields form={recurringForm} setForm={setRecurringForm} students={students.data ?? []} googleConnected={Boolean(googleStatus.data?.connected)} />
             ) : (
@@ -438,6 +459,52 @@ export function LessonsPage() {
         />
       )}
     </Box>
+  );
+}
+
+function GoogleCalendarSaveReminder({
+  syncToGoogle,
+  connected,
+  configured,
+  isReconnecting,
+  onReconnect,
+}: {
+  syncToGoogle: boolean;
+  connected: boolean;
+  configured: boolean;
+  isReconnecting: boolean;
+  onReconnect: () => void;
+}) {
+  if (!syncToGoogle) return null;
+
+  if (!connected) {
+    return (
+      <Paper variant="outlined" sx={{ gridColumn: { md: 'span 2' }, p: 1.5, borderColor: 'warning.light', bgcolor: 'warning.50' }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 1.5 }}>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>Google Calendar needs reconnecting</Typography>
+            <Typography variant="body2" color="text.secondary">Reconnect before saving if you want this change added to Google Calendar.</Typography>
+          </Box>
+          <Button type="button" variant="outlined" color="warning" onClick={onReconnect} disabled={!configured || isReconnecting}>
+            {isReconnecting ? 'Reconnecting…' : 'Reconnect Calendar'}
+          </Button>
+        </Stack>
+      </Paper>
+    );
+  }
+
+  return (
+    <Paper variant="outlined" sx={{ gridColumn: { md: 'span 2' }, p: 1.5, borderColor: 'success.light', bgcolor: 'success.50' }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 1.5 }}>
+        <Box>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>This change will be sent to Google Calendar</Typography>
+          <Typography variant="body2" color="text.secondary">Your connection is active. If you have not used it recently, reconnect before saving to refresh access.</Typography>
+        </Box>
+        <Button type="button" variant="text" color="success" onClick={onReconnect} disabled={!configured || isReconnecting}>
+          {isReconnecting ? 'Reconnecting…' : 'Reconnect'}
+        </Button>
+      </Stack>
+    </Paper>
   );
 }
 

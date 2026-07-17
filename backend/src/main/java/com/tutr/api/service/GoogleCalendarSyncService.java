@@ -50,6 +50,35 @@ public class GoogleCalendarSyncService {
         return connectionService.connectionFor(tutor);
     }
 
+    /**
+     * Checks that Google still accepts the saved authorization. This lets the UI
+     * show a reconnect prompt before a tutor makes a calendar-linked change.
+     */
+    @Transactional
+    public Optional<GoogleCalendarConnection> verifiedConnectionFor(User tutor) {
+        Optional<GoogleCalendarConnection> connection = connectionService.connectionFor(tutor);
+        if (connection.isEmpty()) {
+            return Optional.empty();
+        }
+
+        try {
+            restClient.get()
+                    .uri("https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events?maxResults=1",
+                            calendarIdOrPrimary(connection.get().getCalendarId()))
+                    .header("Authorization", "Bearer " + connectionService.accessToken(connection.get()))
+                    .retrieve()
+                    .toBodilessEntity();
+            return connection;
+        } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden ex) {
+            log.info("Google Calendar authorization is no longer valid for tutor {}", tutor.getId());
+            connection.get().setSyncEnabled(false);
+            return Optional.empty();
+        } catch (RuntimeException ex) {
+            // A temporary Google/network error must not be reported as a disconnect.
+            return connectionService.connectionFor(tutor);
+        }
+    }
+
     public String authUrl(String stateToken) {
         return connectionService.authUrl(stateToken);
     }

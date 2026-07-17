@@ -45,7 +45,7 @@ public class GoogleCalendarController {
 
     @GetMapping("/status")
     GoogleCalendarStatusResponse status(@AuthenticationPrincipal User user) {
-        return googleCalendar.connectionFor(user)
+        return googleCalendar.verifiedConnectionFor(user)
                 .map(connection -> new GoogleCalendarStatusResponse(
                         googleCalendar.isConfigured(),
                         true,
