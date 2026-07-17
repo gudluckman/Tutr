@@ -1,12 +1,5 @@
 package com.tutr.api.controller;
 
-import com.tutr.api.converter.*;
-import com.tutr.api.dto.*;
-import com.tutr.api.entity.*;
-import com.tutr.api.enums.*;
-import com.tutr.api.repository.*;
-import com.tutr.api.service.*;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

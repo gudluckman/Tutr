@@ -307,7 +307,7 @@ export function LessonsPage() {
             disabled={reconnectGoogle.isPending || !googleStatus.data?.configured}
             sx={{ minWidth: 176, whiteSpace: 'nowrap', fontSize: 12, px: 1.75 }}
           >
-            {reconnectGoogle.isPending ? 'Reconnecting…' : 'Reconnect Google Calendar'}
+            {reconnectGoogle.isPending ? 'Reconnecting…' : 'Sync Calendar'}
           </Button>
           <Button
             variant="contained"
