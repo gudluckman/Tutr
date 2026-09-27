@@ -1,11 +1,8 @@
 package com.tutr.api.service;
 
-import com.tutr.api.converter.*;
-import com.tutr.api.dto.*;
 import com.tutr.api.entity.*;
 import com.tutr.api.enums.*;
 import com.tutr.api.repository.*;
-import com.tutr.api.service.*;
 
 import com.tutr.api.entity.Lesson;
 import com.tutr.api.repository.LessonRepository;
@@ -58,6 +55,7 @@ public class AnalyticsService {
     private static final int LAZY_RECURRING_LOOKAHEAD_DAYS = 365;
     private static final int MAX_LAZY_OCCURRENCES_PER_SERIES = 104;
     private static final int REVENUE_POINT_COUNT = 12;
+    private static final int MIN_PAST_AND_CURRENT_REVENUE_WEEKS = 6;
 
     private final LessonRepository lessons;
     private final LessonSeriesRepository lessonSeries;
@@ -462,7 +460,7 @@ public class AnalyticsService {
                     .map(LocalDate::parse)
                     .filter(week -> week.isAfter(currentWeek))
                     .sorted()
-                    .limit(REVENUE_POINT_COUNT - 1L)
+                    .limit(REVENUE_POINT_COUNT - MIN_PAST_AND_CURRENT_REVENUE_WEEKS)
                     .map(LocalDate::toString)
                     .toList();
             int pastAndCurrentPointCount = REVENUE_POINT_COUNT - futureRevenueWeeks.size();
