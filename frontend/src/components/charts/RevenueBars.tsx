@@ -3,7 +3,7 @@ import type { RevenuePeriod, RevenuePoint } from '../../types/analytics';
 const money = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
 
 export function RevenueBars({ data, period }: { data: RevenuePoint[]; period: RevenuePeriod }) {
-  const visibleData = data.filter(hasIncome);
+  const visibleData = period === 'WEEKLY' ? data : data.filter(hasIncome);
   const max = Math.max(...visibleData.map((item) => item.expectedRevenue), 1);
   return (
     <div>
